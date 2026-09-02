@@ -4,12 +4,31 @@ import { storeToRefs } from 'pinia'
 
 import FilterPanel from '../components/FilterPanel.vue'
 import ModelSelector from '../components/ModelSelector.vue'
+import OfferTable from '../components/OfferTable.vue'
+import ErrorNotice from '../components/ErrorNotice.vue'
 import { useCatalogStore } from '../stores/catalog'
+import { loadFixtureBatches, normalizeApiError, useComparisonStore } from '../stores/comparison'
 
 const catalog = useCatalogStore()
 const { confirmedVariant } = storeToRefs(catalog)
-const regionCode = ref('')
+const comparison = useComparisonStore()
+const { offers, excludedCount, loading, error } = storeToRefs(comparison)
+const regionCode = ref('110100')
 const includeConditional = ref(false)
+
+async function runFixtureComparison() {
+  if (!confirmedVariant.value) return
+  try {
+    const batches = await loadFixtureBatches()
+    await comparison.createAndFinalizeSearch({
+      variant_id: confirmedVariant.value.id,
+      region_code: regionCode.value || null,
+      include_conditional: includeConditional.value,
+    }, batches)
+  } catch (caught) {
+    comparison.error = normalizeApiError(caught)
+  }
+}
 </script>
 
 <template>
@@ -27,7 +46,7 @@ const includeConditional = ref(false)
 
     <div class="workbench-grid">
       <FilterPanel v-model:region-code="regionCode" v-model:include-conditional="includeConditional" />
-      <section class="results-placeholder">
+      <section class="results-placeholder" :class="{ 'has-results': offers.length }">
         <div class="section-heading">
           <div>
             <span class="step">步骤 3</span>
@@ -39,18 +58,33 @@ const includeConditional = ref(false)
           <strong>{{ confirmedVariant.storage }} · {{ confirmedVariant.region_version }} · {{ confirmedVariant.condition }}</strong>
           <small>{{ confirmedVariant.sku_code }}</small>
         </div>
-        <div v-else class="empty-state">
+        <ErrorNotice v-if="error" :error="error" />
+        <div v-else-if="!confirmedVariant" class="empty-state">
           <div class="empty-icon">¥</div>
           <h3>等待确认标准 SKU</h3>
           <p>确认后才能创建比价会话，避免不同型号和容量混排。</p>
         </div>
+        <div v-else-if="!offers.length" class="ready-state">
+          <div class="empty-icon">✓</div>
+          <h3>标准 SKU 已确认</h3>
+          <p>点击下方按钮，用本地三平台夹具验证完整比价流程。</p>
+        </div>
+        <div v-else class="comparison-results">
+          <div class="result-summary">
+            <strong>找到 {{ offers.length }} 条可比报价</strong>
+            <span>已排除 {{ excludedCount }} 条干扰项</span>
+          </div>
+          <OfferTable :offers="offers" :include-conditional="includeConditional" />
+        </div>
         <button
           class="primary-action"
           data-test="create-search"
+          data-testid="run-fixture-comparison"
           type="button"
-          :disabled="!confirmedVariant"
+          :disabled="!confirmedVariant || loading"
+          @click="runFixtureComparison"
         >
-          创建比价会话
+          {{ loading ? '正在汇总三平台报价…' : offers.length ? '重新运行离线比价' : '运行三平台离线比价' }}
         </button>
       </section>
     </div>

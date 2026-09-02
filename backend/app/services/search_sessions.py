@@ -282,6 +282,7 @@ def offer_view(value: Offer, platform_code: str, shop: Shop) -> OfferView:
         comparable_price_cents=value.comparable_price_cents,
         confirmed_final_price_cents=value.final_price_cents,
         estimated_final_price_cents=value.estimated_final_price_cents,
+        conditional_price_cents=value.conditional_price_cents,
         subsidy_status=value.subsidy_status,
         match_confidence=value.match_confidence,
         excluded_reason=value.excluded_reason,

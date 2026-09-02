@@ -78,6 +78,7 @@ class OfferView(BaseModel):
     comparable_price_cents: int | None
     confirmed_final_price_cents: int | None
     estimated_final_price_cents: int | None
+    conditional_price_cents: int | None
     subsidy_status: str
     match_confidence: int
     excluded_reason: str | None
