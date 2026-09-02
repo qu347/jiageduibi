@@ -65,3 +65,33 @@ def test_catalog_export_has_deterministic_code_order(client: TestClient) -> None
         "APPLE_IPHONE_17_PRO_MAX",
     ]
     assert exported["variants"][0]["sku_code"] == "APPLE_IPHONE_17_256_CN_NEW_ANY"
+
+
+def test_get_catalog_variant_by_id_for_session_restore(client: TestClient) -> None:
+    assert client.post("/api/catalog/import", json=catalog_fixture()).status_code == 200
+    variant_id = client.get("/api/catalog/search", params={"q": "苹果17"}).json()["items"][0]["variants"][0]["id"]
+
+    response = client.get(f"/api/catalog/variants/{variant_id}")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "id": variant_id,
+        "sku_code": "APPLE_IPHONE_17_256_CN_NEW_ANY",
+        "storage": "256GB",
+        "memory": None,
+        "color": "不限",
+        "region_version": "中国大陆国行",
+        "condition": "全新",
+    }
+
+
+def test_missing_catalog_variant_uses_structured_404(client: TestClient) -> None:
+    response = client.get("/api/catalog/variants/999999")
+
+    assert response.status_code == 404
+    assert set(response.json()["detail"]) == {
+        "what_happened",
+        "possible_cause",
+        "partial_saved",
+        "next_action",
+    }

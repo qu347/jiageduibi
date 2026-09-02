@@ -218,6 +218,19 @@ def search_catalog(db: Session, query: str) -> list[CatalogModelSummary]:
     return [item[2] for item in ranked]
 
 
+def get_catalog_variant(db: Session, variant_id: int) -> CatalogVariantView:
+    variant = db.scalar(
+        select(ProductVariant).where(
+            ProductVariant.id == variant_id,
+            ProductVariant.active.is_(True),
+            ProductVariant.deleted_at.is_(None),
+        )
+    )
+    if variant is None:
+        raise ValueError("标准 SKU 不存在或已停用")
+    return CatalogVariantView.model_validate(variant, from_attributes=True)
+
+
 def export_catalog(db: Session) -> CatalogExport:
     brands = list(db.scalars(select(Brand).where(Brand.deleted_at.is_(None)).order_by(Brand.name)))
     series_rows = db.execute(

@@ -26,6 +26,7 @@ export interface SearchSessionView {
   id: number
   variant_id: number
   region_code: string | null
+  comparison_scope: 'national' | 'regional'
   include_conditional: boolean
   status: string
   created_at: string
@@ -34,6 +35,7 @@ export interface SearchSessionView {
 
 export interface ComparisonResult {
   id: number
+  comparison_scope: 'national' | 'regional'
   status: string
   offers: OfferView[]
   excluded_count: number
@@ -42,6 +44,7 @@ export interface ComparisonResult {
 export interface CreateSearchCommand {
   variant_id: number
   region_code: string | null
+  comparison_scope: 'national'
   include_conditional: boolean
 }
 

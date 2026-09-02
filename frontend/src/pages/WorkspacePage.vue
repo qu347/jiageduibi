@@ -22,6 +22,7 @@ async function runFixtureComparison() {
     await comparison.createAndFinalizeSearch({
       variant_id: confirmedVariant.value.id,
       region_code: null,
+      comparison_scope: 'national',
       include_conditional: includeConditional.value,
     }, batches)
   } catch (caught) {

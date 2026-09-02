@@ -3,8 +3,8 @@ from collections.abc import Generator
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 
-from app.schemas.catalog import CatalogExport, CatalogImport, CatalogSearchResponse
-from app.services.catalog import CatalogImportError, export_catalog, import_catalog, search_catalog
+from app.schemas.catalog import CatalogExport, CatalogImport, CatalogSearchResponse, CatalogVariantView
+from app.services.catalog import CatalogImportError, export_catalog, get_catalog_variant, import_catalog, search_catalog
 
 
 router = APIRouter(prefix="/api/catalog", tags=["catalog"])
@@ -18,6 +18,22 @@ def get_db(request: Request) -> Generator[Session, None, None]:
 @router.get("/search", response_model=CatalogSearchResponse)
 def search(q: str = Query(min_length=1), db: Session = Depends(get_db)) -> CatalogSearchResponse:
     return CatalogSearchResponse(items=search_catalog(db, q))
+
+
+@router.get("/variants/{variant_id}", response_model=CatalogVariantView)
+def get_variant(variant_id: int, db: Session = Depends(get_db)) -> CatalogVariantView:
+    try:
+        return get_catalog_variant(db, variant_id)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "what_happened": "恢复标准 SKU 失败",
+                "possible_cause": str(exc),
+                "partial_saved": False,
+                "next_action": "重新检索并确认标准 SKU",
+            },
+        ) from exc
 
 
 @router.post("/import")
