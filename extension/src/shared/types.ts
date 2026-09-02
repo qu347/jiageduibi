@@ -8,6 +8,6 @@ export interface PairingApi {
   pair(code: string): Promise<{ token: string }>
 }
 
-export interface BackgroundMessage {
-  type: 'PING' | 'CAPTURE_ACTIVE_TAB'
-}
+export type BackgroundMessage =
+  | { type: 'PING' }
+  | { type: 'CAPTURE_ACTIVE_TAB'; searchSessionId: number }

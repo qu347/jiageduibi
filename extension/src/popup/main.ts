@@ -10,6 +10,7 @@ const status = document.querySelector<HTMLElement>('#backend-status')!
 const codeInput = document.querySelector<HTMLInputElement>('#pairing-code')!
 const pairButton = document.querySelector<HTMLButtonElement>('#pair')!
 const captureButton = document.querySelector<HTMLButtonElement>('#capture')!
+const searchSessionInput = document.querySelector<HTMLInputElement>('#search-session-id')!
 const message = document.querySelector<HTMLElement>('#message')!
 
 async function refreshStatus() {
@@ -43,8 +44,25 @@ pairButton.addEventListener('click', async () => {
   }
 })
 
-captureButton.addEventListener('click', () => {
-  message.textContent = '页面采集将在下一步启用。'
+captureButton.addEventListener('click', async () => {
+  const searchSessionId = Number(searchSessionInput.value)
+  if (!Number.isInteger(searchSessionId) || searchSessionId <= 0) {
+    message.textContent = '请填写工作台中的比价会话 ID。'
+    return
+  }
+  captureButton.disabled = true
+  message.textContent = '正在读取当前标签页的公开商品字段…'
+  try {
+    const result = await chrome.runtime.sendMessage({ type: 'CAPTURE_ACTIVE_TAB', searchSessionId }) as {
+      status: string
+      message: string
+    }
+    message.textContent = result.message
+  } catch (error) {
+    message.textContent = error instanceof Error ? error.message : '采集失败'
+  } finally {
+    captureButton.disabled = false
+  }
 })
 
 void refreshStatus()

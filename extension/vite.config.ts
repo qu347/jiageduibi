@@ -10,10 +10,15 @@ export default defineConfig({
     rollupOptions: {
       input: {
         background: resolve(import.meta.dirname, 'src/background/index.ts'),
+        capture: resolve(import.meta.dirname, 'src/content/capture.ts'),
         popup: resolve(import.meta.dirname, 'src/popup/index.html'),
       },
       output: {
-        entryFileNames: (chunk) => chunk.name === 'background' ? 'background.js' : 'assets/[name]-[hash].js',
+        entryFileNames: (chunk) => {
+          if (chunk.name === 'background') return 'background.js'
+          if (chunk.name === 'capture') return 'capture.js'
+          return 'assets/[name]-[hash].js'
+        },
       },
     },
   },
