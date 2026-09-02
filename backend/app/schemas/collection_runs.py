@@ -70,3 +70,10 @@ class CollectionRegionTaskView(BaseModel):
     started_at: datetime | None
     finished_at: datetime | None
 
+
+class AutomationEnvironmentView(BaseModel):
+    agent_reach_available: bool
+    opencli_available: bool
+    browser_bridge_ready: bool
+    plugin_ready: bool
+    safe_message: str
