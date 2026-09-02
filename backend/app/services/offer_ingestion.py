@@ -27,74 +27,11 @@ def ingest_candidates(db: Session, search_id: int, payload: PlatformOfferBatch) 
 
     try:
         for raw in payload.items:
-            if raw.platform != payload.platform:
-                raise ValueError("批次平台与报价平台不一致")
-            region_code, region_name, _region_key = resolve_offer_region(
-                search,
-                raw.region_code,
-                raw.region_name,
-            )
-            match = match_offer(raw, target)
-            if not match.accepted:
-                exclusions[match.excluded_reason or "low_confidence"] += 1
-                save_excluded(db, search, target, raw, payload, match, region_code, region_name)
-                continue
-            if raw.sale_price_cents is None:
-                missing = MatchResult(
-                    score=match.score,
-                    accepted=False,
-                    review_required=False,
-                    reasons=[*match.reasons, "缺少一次性总价"],
-                    excluded_reason="missing_price",
-                )
-                exclusions["missing_price"] += 1
-                save_excluded(db, search, target, raw, payload, missing, region_code, region_name)
-                continue
-
-            decision = evaluate_subsidy(
-                rules,
-                SubsidyContext(
-                    region_code=region_code,
-                    category="手机",
-                    platform=raw.platform,
-                    shop_type=raw.shop_type,
-                    price_cents=raw.sale_price_cents,
-                    at_date=raw.captured_at.date(),
-                    platform_confirmed=raw.subsidy_status == "confirmed",
-                    platform_sku_matches=raw.platform_sku_id is not None,
-                    platform_subsidy_amount_cents=(
-                        raw.subsidy_amount_cents if raw.subsidy_status == "confirmed" else None
-                    ),
-                ),
-            )
-            price = calculate_price(
-                OfferPriceInput(
-                    sale_price_cents=raw.sale_price_cents,
-                    merchant_discount_cents=raw.merchant_discount_cents,
-                    platform_coupon_cents=raw.platform_coupon_cents,
-                    subsidy_amount_cents=decision.amount_cents,
-                    subsidy_status=decision.status,
-                    shipping_fee_cents=raw.shipping_fee_cents,
-                    installation_fee_cents=raw.installation_fee_cents,
-                    conditions=[decision.reason] if decision.status == "estimated" else [],
-                )
-            )
-            save_evaluated_offer(
-                db,
-                search.id,
-                evaluated(
-                    raw,
-                    payload,
-                    target,
-                    match,
-                    price,
-                    decision.status,
-                    decision.amount_cents,
-                    region_code,
-                    region_name,
-                ),
-            )
-            accepted_count += 1
+            exclusion = evaluate_and_save_candidate(db, search, target, rules, payload, raw)
+            if exclusion is None:
+                accepted_count += 1
+            else:
+                exclusions[exclusion] += 1
 
         finished_at = datetime.now(UTC)
         platform = db.scalar(select(Platform).where(Platform.code == payload.platform))
@@ -127,6 +64,114 @@ def ingest_candidates(db: Session, search_id: int, payload: PlatformOfferBatch) 
         excluded_count=sum(exclusions.values()),
         exclusions=dict(exclusions),
     )
+
+
+def ingest_verified_browser_offer(
+    db: Session,
+    search_id: int,
+    raw: RawOffer,
+    *,
+    adapter_version: str,
+) -> IngestionSummary:
+    payload = PlatformOfferBatch(
+        platform="jd",
+        platform_name="京东",
+        adapter_version=adapter_version,
+        source_type="browser",
+        items=[raw],
+    )
+    search = require_collecting_session(db, search_id)
+    target = load_match_target(db, search.variant_id)
+    rules = load_rules(db)
+    try:
+        exclusion = evaluate_and_save_candidate(db, search, target, rules, payload, raw)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    return IngestionSummary(
+        platform="jd",
+        accepted_count=0 if exclusion else 1,
+        excluded_count=1 if exclusion else 0,
+        exclusions={exclusion: 1} if exclusion else {},
+    )
+
+
+def evaluate_and_save_candidate(
+    db: Session,
+    search: SearchSession,
+    target: MatchTarget,
+    rules: list[SubsidyRuleInput],
+    payload: PlatformOfferBatch,
+    raw: RawOffer,
+) -> str | None:
+    if raw.platform != payload.platform:
+        raise ValueError("批次平台与报价平台不一致")
+    region_code, region_name, _region_key = resolve_offer_region(
+        search,
+        raw.region_code,
+        raw.region_name,
+    )
+    match = match_offer(raw, target)
+    if not match.accepted:
+        reason = match.excluded_reason or "low_confidence"
+        save_excluded(db, search, target, raw, payload, match, region_code, region_name)
+        return reason
+    if raw.sale_price_cents is None:
+        missing = MatchResult(
+            score=match.score,
+            accepted=False,
+            review_required=False,
+            reasons=[*match.reasons, "缺少一次性总价"],
+            excluded_reason="missing_price",
+        )
+        save_excluded(db, search, target, raw, payload, missing, region_code, region_name)
+        return "missing_price"
+
+    decision = evaluate_subsidy(
+        rules,
+        SubsidyContext(
+            region_code=region_code,
+            category="手机",
+            platform=raw.platform,
+            shop_type=raw.shop_type,
+            price_cents=raw.sale_price_cents,
+            at_date=raw.captured_at.date(),
+            platform_confirmed=raw.subsidy_status == "confirmed",
+            platform_sku_matches=raw.platform_sku_id is not None,
+            platform_subsidy_amount_cents=(
+                raw.subsidy_amount_cents if raw.subsidy_status == "confirmed" else None
+            ),
+        ),
+    )
+    price = calculate_price(
+        OfferPriceInput(
+            sale_price_cents=raw.sale_price_cents,
+            merchant_discount_cents=raw.merchant_discount_cents,
+            platform_coupon_cents=raw.platform_coupon_cents,
+            subsidy_amount_cents=decision.amount_cents,
+            subsidy_status=decision.status,
+            shipping_fee_cents=raw.shipping_fee_cents,
+            installation_fee_cents=raw.installation_fee_cents,
+            conditions=[decision.reason] if decision.status == "estimated" else [],
+        )
+    )
+    save_evaluated_offer(
+        db,
+        search.id,
+        evaluated(
+            raw,
+            payload,
+            target,
+            match,
+            price,
+            decision.status,
+            decision.amount_cents,
+            region_code,
+            region_name,
+        ),
+    )
+    return None
 
 
 def require_collecting_session(db: Session, search_id: int) -> SearchSession:
