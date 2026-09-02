@@ -1,6 +1,7 @@
 import { DEFAULT_BACKEND_URL } from '../shared/api'
+import { formatIngestionSummary, validateCollectionSession } from '../shared/collection-session'
 import type { ParseResult } from '../parsers'
-import type { BackgroundMessage } from '../shared/types'
+import type { BackgroundMessage, IngestionSummary } from '../shared/types'
 
 
 chrome.runtime.onMessage.addListener((message: BackgroundMessage, _sender, sendResponse) => {
@@ -22,6 +23,12 @@ chrome.runtime.onMessage.addListener((message: BackgroundMessage, _sender, sendR
 
 
 async function captureAndSubmit(searchSessionId: number): Promise<ParseResult | { status: 'submitted'; message: string }> {
+  const stored = await chrome.storage.local.get(['extensionToken', 'backendUrl'])
+  const token = typeof stored.extensionToken === 'string' ? stored.extensionToken : ''
+  const backendUrl = typeof stored.backendUrl === 'string' ? stored.backendUrl : DEFAULT_BACKEND_URL
+  if (!token) return { status: 'unsupported', message: '扩展尚未配对' }
+  await validateCollectionSession(searchSessionId, backendUrl)
+
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
   if (!tab?.id || !tab.url) return { status: 'unsupported', message: '当前标签页无法采集' }
 
@@ -29,10 +36,6 @@ async function captureAndSubmit(searchSessionId: number): Promise<ParseResult | 
   const result = await chrome.tabs.sendMessage(tab.id, { type: 'CAPTURE_PAGE' }) as ParseResult
   if (result.status !== 'ok') return result
 
-  const stored = await chrome.storage.local.get(['extensionToken', 'backendUrl'])
-  const token = typeof stored.extensionToken === 'string' ? stored.extensionToken : ''
-  const backendUrl = typeof stored.backendUrl === 'string' ? stored.backendUrl : DEFAULT_BACKEND_URL
-  if (!token) return { status: 'unsupported', message: '扩展尚未配对' }
   const platform = result.items[0]?.platform
   if (!platform) return { status: 'unsupported', message: '页面没有可提交的商品' }
 
@@ -50,5 +53,6 @@ async function captureAndSubmit(searchSessionId: number): Promise<ParseResult | 
     }),
   })
   if (!response.ok) return { status: 'unsupported', message: `本地服务拒绝报价（${response.status}）` }
-  return { status: 'submitted', message: `已提交 ${result.items.length} 条候选报价` }
+  const summary = await response.json() as IngestionSummary
+  return { status: 'submitted', message: formatIngestionSummary(summary, searchSessionId) }
 }
