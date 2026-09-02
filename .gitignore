@@ -1,0 +1,27 @@
+.superpowers/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+.coverage
+htmlcov/
+
+# Node
+node_modules/
+dist/
+coverage/
+
+# Local configuration and data
+.env
+data/*.db
+data/*.db-*
+data/backups/
+data/exports/
+
+# Editors and operating system
+.idea/
+.vscode/
+Thumbs.db
+.DS_Store
