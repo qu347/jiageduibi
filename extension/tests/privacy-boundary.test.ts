@@ -21,7 +21,23 @@ it('keeps privileged and persistent host permissions out of the manifest', () =>
     readFileSync(resolve(import.meta.dirname, '../public/manifest.json'), 'utf8'),
   ) as { permissions: string[]; host_permissions: string[] }
 
-  expect(manifest.permissions).not.toContain('cookies')
-  expect(manifest.permissions).not.toContain('history')
+  expect(manifest.permissions).toEqual(['activeTab', 'storage', 'scripting'])
   expect(manifest.host_permissions).toEqual(['http://127.0.0.1/*'])
+})
+
+
+it('limits extension storage to non-sensitive configuration keys', () => {
+  const source = [
+    '../src/shared/api.ts',
+    '../src/shared/collection-session.ts',
+    '../src/background/index.ts',
+    '../src/popup/main.ts',
+  ].map((path) => readFileSync(resolve(import.meta.dirname, path), 'utf8')).join('\n')
+
+  for (const forbidden of ['cookie', 'password', 'address', 'phone', 'pageHtml', 'documentHtml']) {
+    expect(source).not.toMatch(new RegExp(`['\"]${forbidden}['\"]`, 'i'))
+  }
+  expect(source).toContain("'backendUrl'")
+  expect(source).toContain("'extensionToken'")
+  expect(source).toContain("'searchSessionId'")
 })
