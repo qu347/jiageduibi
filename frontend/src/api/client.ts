@@ -1,3 +1,10 @@
+import type {
+  AutomationEnvironment,
+  CollectionRegionTaskView,
+  CollectionRunView,
+} from '../types/offers'
+
+
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -32,4 +39,22 @@ export async function apiPost<T>(path: string, body?: unknown): Promise<T> {
   })
   if (!response.ok) throw await ApiError.fromResponse(response)
   return response.json() as Promise<T>
+}
+
+
+export const automaticCollectionApi = {
+  environment: () => apiGet<AutomationEnvironment>('/api/automation/environment'),
+  create: (sessionId: number) => apiPost<CollectionRunView>(
+    `/api/search-sessions/${sessionId}/collection-runs`,
+    { platform: 'jd' },
+  ),
+  get: (runId: number) => apiGet<CollectionRunView>(`/api/collection-runs/${runId}`),
+  tasks: (runId: number) => apiGet<CollectionRegionTaskView[]>(`/api/collection-runs/${runId}/tasks`),
+  pause: (runId: number) => apiPost<CollectionRunView>(`/api/collection-runs/${runId}/pause`, {}),
+  resume: (runId: number) => apiPost<CollectionRunView>(`/api/collection-runs/${runId}/resume`, {}),
+  stop: (runId: number) => apiPost<CollectionRunView>(`/api/collection-runs/${runId}/stop`, {}),
+  retryFailed: (runId: number) => apiPost<CollectionRunView>(
+    `/api/collection-runs/${runId}/retry-failed`,
+    {},
+  ),
 }

@@ -81,3 +81,70 @@ export interface PlatformStatus {
   fixture_status: 'passing' | 'failing' | 'not_run'
   live_status: 'not_validated'
 }
+
+export type CollectionRunStatus =
+  | 'queued'
+  | 'running'
+  | 'paused'
+  | 'waiting_user'
+  | 'completed'
+  | 'completed_partial'
+  | 'stopped'
+  | 'failed'
+
+export type CollectionRegionTaskStatus =
+  | 'queued'
+  | 'running'
+  | 'waiting_user'
+  | 'completed'
+  | 'failed'
+  | 'skipped'
+
+export interface CollectionRunView {
+  id: number
+  search_session_id: number
+  platform: 'jd'
+  status: CollectionRunStatus
+  stage: string
+  candidate_source: string
+  candidate_count: number
+  selected_candidate_count: number
+  total_region_count: number
+  completed_region_count: number
+  failed_region_count: number
+  skipped_region_count: number
+  current_region_code: string | null
+  pause_requested: boolean
+  stop_requested: boolean
+  last_error_code: string | null
+  last_error_summary: string | null
+  started_at: string | null
+  updated_at: string
+  finished_at: string | null
+}
+
+export interface CollectionRegionTaskView {
+  id: number
+  collection_run_id: number
+  region_code: string
+  province: string
+  city: string
+  district: string
+  sequence: number
+  status: CollectionRegionTaskStatus
+  attempts: number
+  verified_candidate_count: number
+  accepted_offer_count: number
+  error_code: string | null
+  error_summary: string | null
+  started_at: string | null
+  finished_at: string | null
+}
+
+export interface AutomationEnvironment {
+  agent_reach_available: boolean
+  opencli_available: boolean
+  browser_bridge_ready: boolean
+  plugin_ready: boolean
+  safe_message: string
+}

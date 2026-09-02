@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted, onUnmounted, ref } from 'vue'
 import { storeToRefs } from 'pinia'
 
 import FilterPanel from '../components/FilterPanel.vue'
@@ -7,13 +7,25 @@ import ModelSelector from '../components/ModelSelector.vue'
 import OfferTable from '../components/OfferTable.vue'
 import ErrorNotice from '../components/ErrorNotice.vue'
 import CollectionSessionCard from '../components/CollectionSessionCard.vue'
+import AutomaticCollectionCard from '../components/AutomaticCollectionCard.vue'
 import { useCatalogStore } from '../stores/catalog'
 import { loadFixtureBatches, normalizeApiError, useComparisonStore } from '../stores/comparison'
 
 const catalog = useCatalogStore()
 const { confirmedVariant } = storeToRefs(catalog)
 const comparison = useComparisonStore()
-const { offers, excludedCount, loading, error, session, restoreMessage } = storeToRefs(comparison)
+const {
+  offers,
+  excludedCount,
+  loading,
+  error,
+  session,
+  restoreMessage,
+  automationEnvironment,
+  automaticRun,
+  automaticTasks,
+  automaticLoading,
+} = storeToRefs(comparison)
 const includeConditional = ref(false)
 
 async function runFixtureComparison() {
@@ -36,12 +48,21 @@ async function createCollectionSession() {
   await comparison.createCollectionSession(confirmedVariant.value.id, includeConditional.value)
 }
 
+async function startAutomaticCollection() {
+  if (!confirmedVariant.value) return
+  await comparison.startAutomaticCollection(confirmedVariant.value.id, includeConditional.value)
+}
+
 async function copySessionId() {
   if (!session.value) return
   await navigator.clipboard.writeText(String(session.value.id))
 }
 
-onMounted(() => comparison.restoreCollectionSession())
+onMounted(() => {
+  void comparison.loadAutomationEnvironment()
+  void comparison.restoreCollectionSession().then(() => comparison.restoreAutomaticCollection())
+})
+onUnmounted(() => comparison.stopAutomaticPolling())
 </script>
 
 <template>
@@ -72,16 +93,31 @@ onMounted(() => comparison.restoreCollectionSession())
           <small>{{ confirmedVariant.sku_code }}</small>
         </div>
         <p v-if="restoreMessage" class="message">{{ restoreMessage }}</p>
-        <CollectionSessionCard
-          :session="session"
-          :sku="confirmedVariant"
-          :loading="loading"
-          @create="createCollectionSession"
-          @recreate="createCollectionSession"
-          @copy="copySessionId"
-          @refresh="comparison.refreshCollectionSession()"
-          @finalize="comparison.finalizeCollectionSession()"
+        <AutomaticCollectionCard
+          :run="automaticRun"
+          :tasks="automaticTasks"
+          :environment="automationEnvironment"
+          :can-start="Boolean(confirmedVariant)"
+          :loading="automaticLoading"
+          @start="startAutomaticCollection"
+          @pause="comparison.pauseAutomaticCollection()"
+          @resume="comparison.resumeAutomaticCollection()"
+          @stop="comparison.stopAutomaticCollection()"
+          @retry="comparison.retryFailedRegions()"
         />
+        <details class="manual-collection-fallback">
+          <summary>手动采集备用</summary>
+          <CollectionSessionCard
+            :session="session"
+            :sku="confirmedVariant"
+            :loading="loading"
+            @create="createCollectionSession"
+            @recreate="createCollectionSession"
+            @copy="copySessionId"
+            @refresh="comparison.refreshCollectionSession()"
+            @finalize="comparison.finalizeCollectionSession()"
+          />
+        </details>
         <ErrorNotice v-if="error" :error="error" />
         <div v-else-if="!confirmedVariant" class="empty-state">
           <div class="empty-icon">¥</div>
