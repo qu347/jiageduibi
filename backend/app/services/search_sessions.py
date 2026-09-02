@@ -2,7 +2,7 @@ import hashlib
 import json
 from datetime import UTC, datetime
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.db.models.catalog import ProductVariant
@@ -20,6 +20,7 @@ from app.schemas.search_sessions import (
     EvaluatedOffer,
     OfferView,
     SearchSessionView,
+    SearchResult,
 )
 
 
@@ -38,6 +39,60 @@ def create_search_session(db: Session, command: CreateSearchSession) -> SearchSe
     db.add(search)
     db.flush()
     return search_session_view(search)
+
+
+def get_search_session(db: Session, session_id: int) -> SearchSessionView:
+    search = db.get(SearchSession, session_id)
+    if search is None:
+        raise ValueError("搜索会话不存在")
+    return search_session_view(search)
+
+
+def list_offer_views(db: Session, session_id: int | None = None) -> list[OfferView]:
+    query = (
+        select(Offer, Platform, Shop)
+        .join(Platform, Offer.platform_id == Platform.id)
+        .join(Shop, Offer.shop_id == Shop.id)
+        .where(Offer.deleted_at.is_(None), Offer.excluded_reason.is_(None))
+    )
+    if session_id is not None:
+        query = query.where(Offer.search_session_id == session_id)
+    rows = db.execute(query).all()
+    return [offer_view(offer, platform.code, shop) for offer, platform, shop in rows]
+
+
+def finalize_search_session(db: Session, session_id: int) -> SearchResult:
+    search = db.get(SearchSession, session_id)
+    if search is None:
+        raise ValueError("搜索会话不存在")
+    if search.status == "collecting":
+        search.status = "completed"
+        search.finalized_at = datetime.now(UTC)
+        db.commit()
+
+    offers = list_offer_views(db, session_id)
+    ranked = sorted(
+        offers,
+        key=lambda item: (
+            item.comparable_price_cents is None,
+            item.comparable_price_cents if item.comparable_price_cents is not None else 2**63 - 1,
+            {"self_operated": 0, "official_flagship": 1, "authorized": 2, "third_party": 3}[item.shop_type],
+            -int(item.captured_at.timestamp()),
+            item.id,
+        ),
+    )
+    excluded_count = db.scalar(
+        select(func.count(Offer.id)).where(
+            Offer.search_session_id == session_id,
+            Offer.excluded_reason.is_not(None),
+        )
+    )
+    return SearchResult(
+        id=search.id,
+        status=search.status,
+        offers=ranked,
+        excluded_count=excluded_count or 0,
+    )
 
 
 def fallback_platform_sku(value: EvaluatedOffer) -> str:

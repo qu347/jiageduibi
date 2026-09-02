@@ -3,7 +3,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.schemas.offers import MatchResult, PriceBreakdown
+from app.schemas.offers import MatchResult, PriceBreakdown, RawOffer
 
 
 class CreateSearchSession(BaseModel):
@@ -83,3 +83,27 @@ class OfferView(BaseModel):
     excluded_reason: str | None
     captured_at: datetime
     source_type: str
+
+
+class PlatformOfferBatch(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    platform: str
+    platform_name: str
+    adapter_version: str
+    source_type: str
+    items: list[RawOffer]
+
+
+class IngestionSummary(BaseModel):
+    platform: str
+    accepted_count: int
+    excluded_count: int
+    exclusions: dict[str, int]
+
+
+class SearchResult(BaseModel):
+    id: int
+    status: str
+    offers: list[OfferView]
+    excluded_count: int

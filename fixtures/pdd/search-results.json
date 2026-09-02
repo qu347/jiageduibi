@@ -1,0 +1,59 @@
+{
+  "platform": "pdd",
+  "platform_name": "拼多多",
+  "adapter_version": "fixture-v1",
+  "source_type": "fixture",
+  "items": [
+    {
+      "platform": "pdd",
+      "title": "iPhone 17 256GB 蓝色 全新国行",
+      "platform_product_id": "pdd-phone-1",
+      "platform_sku_id": "pdd-sku-256-blue",
+      "platform_shop_id": "pdd-authorized",
+      "shop_name": "品牌授权店",
+      "shop_type": "authorized",
+      "product_url": "https://example.invalid/pdd/pdd-phone-1",
+      "sale_price_cents": 509900,
+      "color": "蓝色",
+      "captured_at": "2026-09-02T01:02:00Z"
+    },
+    {
+      "platform": "pdd",
+      "title": "iPhone 17 512GB 全新国行",
+      "platform_product_id": "pdd-512-1",
+      "platform_sku_id": "pdd-sku-512",
+      "platform_shop_id": "pdd-authorized",
+      "shop_name": "品牌授权店",
+      "shop_type": "authorized",
+      "product_url": "https://example.invalid/pdd/pdd-512-1",
+      "sale_price_cents": 489900,
+      "captured_at": "2026-09-02T01:02:00Z"
+    },
+    {
+      "platform": "pdd",
+      "title": "iPhone 17 256GB 每月 199 元",
+      "platform_product_id": "pdd-monthly-1",
+      "platform_sku_id": "pdd-monthly",
+      "platform_shop_id": "pdd-third",
+      "shop_name": "数码店",
+      "shop_type": "third_party",
+      "product_url": "https://example.invalid/pdd/pdd-monthly-1",
+      "listed_price_cents": 19900,
+      "price_type": "installment",
+      "captured_at": "2026-09-02T01:02:00Z"
+    },
+    {
+      "platform": "pdd",
+      "title": "iPhone 17 256GB 以旧换新后 3999 元",
+      "platform_product_id": "pdd-trade-1",
+      "platform_sku_id": "pdd-trade",
+      "platform_shop_id": "pdd-third",
+      "shop_name": "数码店",
+      "shop_type": "third_party",
+      "product_url": "https://example.invalid/pdd/pdd-trade-1",
+      "sale_price_cents": 399900,
+      "price_type": "trade_in",
+      "captured_at": "2026-09-02T01:02:00Z"
+    }
+  ]
+}

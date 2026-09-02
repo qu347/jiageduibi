@@ -4,6 +4,8 @@ from fastapi import FastAPI
 from sqlalchemy import inspect, make_url
 
 from app.api.catalog import router as catalog_router
+from app.api.offers import router as offers_router
+from app.api.search_sessions import router as search_sessions_router
 from app.api.subsidy_rules import router as subsidy_rules_router
 from app.core.config import DEFAULT_DATABASE_URL
 from app.db.session import build_engine, session_factory
@@ -27,6 +29,8 @@ def create_app(database_url: str | None = None) -> FastAPI:
     app.state.engine = build_engine(configured_database_url)
     app.state.session_factory = session_factory(app.state.engine)
     app.include_router(catalog_router)
+    app.include_router(search_sessions_router)
+    app.include_router(offers_router)
     app.include_router(subsidy_rules_router)
 
     @app.get("/api/health")

@@ -1,0 +1,45 @@
+{
+  "platform": "taobao",
+  "platform_name": "淘宝",
+  "adapter_version": "fixture-v1",
+  "source_type": "fixture",
+  "items": [
+    {
+      "platform": "taobao",
+      "title": "Apple iPhone 17 256GB 白色 全新国行",
+      "platform_product_id": "tb-phone-1",
+      "platform_sku_id": "tb-sku-256-white",
+      "platform_shop_id": "tb-official",
+      "shop_name": "Apple Store 官方旗舰店",
+      "shop_type": "official_flagship",
+      "product_url": "https://example.invalid/taobao/tb-phone-1",
+      "sale_price_cents": 504900,
+      "color": "白色",
+      "captured_at": "2026-09-02T01:01:00Z"
+    },
+    {
+      "platform": "taobao",
+      "title": "Apple iPhone 17 Pro 256GB 全新国行",
+      "platform_product_id": "tb-pro-1",
+      "platform_sku_id": "tb-pro-256",
+      "platform_shop_id": "tb-official",
+      "shop_name": "Apple Store 官方旗舰店",
+      "shop_type": "official_flagship",
+      "product_url": "https://example.invalid/taobao/tb-pro-1",
+      "sale_price_cents": 489900,
+      "captured_at": "2026-09-02T01:01:00Z"
+    },
+    {
+      "platform": "taobao",
+      "title": "二手 iPhone 17 256GB 国行",
+      "platform_product_id": "tb-used-1",
+      "platform_sku_id": "tb-used-256",
+      "platform_shop_id": "tb-used",
+      "shop_name": "二手数码店",
+      "shop_type": "third_party",
+      "product_url": "https://example.invalid/taobao/tb-used-1",
+      "sale_price_cents": 409900,
+      "captured_at": "2026-09-02T01:01:00Z"
+    }
+  ]
+}

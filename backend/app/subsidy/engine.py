@@ -28,6 +28,17 @@ def evaluate_subsidy(
     if context.region_code is None:
         return SubsidyDecision(status="unknown", reason="需要先选择省市")
 
+    if (
+        context.platform_confirmed
+        and context.platform_sku_matches
+        and context.platform_subsidy_amount_cents is not None
+    ):
+        return SubsidyDecision(
+            status="confirmed",
+            amount_cents=context.platform_subsidy_amount_cents,
+            reason="平台已对同一 SKU 确认补贴",
+        )
+
     eligible = [
         rule
         for rule in rules
