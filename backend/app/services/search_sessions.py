@@ -22,6 +22,7 @@ from app.schemas.search_sessions import (
     SearchSessionView,
     SearchResult,
 )
+from app.services.region_identity import build_region_key
 
 
 def create_search_session(db: Session, command: CreateSearchSession) -> SearchSessionView:
@@ -114,6 +115,11 @@ def save_evaluated_offer(db: Session, session_id: int, value: EvaluatedOffer) ->
         raise ValueError("搜索会话不存在")
     if search.status != "collecting":
         raise ValueError("搜索会话已结束")
+    region_code, region_name, region_key = resolve_offer_region(
+        search,
+        value.region_code,
+        value.region_name,
+    )
 
     with db.begin_nested():
         platform = db.scalar(select(Platform).where(Platform.code == value.platform))
@@ -176,6 +182,7 @@ def save_evaluated_offer(db: Session, session_id: int, value: EvaluatedOffer) ->
                 Offer.search_session_id == session_id,
                 Offer.platform_id == platform.id,
                 Offer.platform_sku_id == sku_id,
+                Offer.region_key == region_key,
             )
         )
         if offer is None:
@@ -189,10 +196,11 @@ def save_evaluated_offer(db: Session, session_id: int, value: EvaluatedOffer) ->
                 source_type=value.source_type,
                 adapter_version=value.adapter_version,
                 captured_at=value.captured_at,
+                region_key=region_key,
             )
             db.add(offer)
 
-        apply_current_offer_values(offer, product, shop, search, value)
+        apply_current_offer_values(offer, product, shop, value, region_code, region_name, region_key)
         db.flush()
         db.add(
             PriceSnapshot(
@@ -225,8 +233,10 @@ def apply_current_offer_values(
     offer: Offer,
     product: PlatformProduct,
     shop: Shop,
-    search: SearchSession,
     value: EvaluatedOffer,
+    region_code: str | None,
+    region_name: str | None,
+    region_key: str,
 ) -> None:
     offer.platform_product_id = product.id
     offer.shop_id = shop.id
@@ -259,13 +269,25 @@ def apply_current_offer_values(
     offer.stock_status = value.stock_status
     offer.excluded_reason = value.match.excluded_reason
     offer.subsidy_status = value.subsidy_status
-    offer.region_code = value.region_code or search.region_code
-    offer.region_name = value.region_name
+    offer.region_code = region_code
+    offer.region_name = region_name
+    offer.region_key = region_key
     offer.match_confidence = value.match.score
     offer.source_type = value.source_type
     offer.adapter_version = value.adapter_version
     offer.captured_at = value.captured_at
     offer.deleted_at = None
+
+
+def resolve_offer_region(
+    search: SearchSession,
+    region_code: str | None,
+    region_name: str | None,
+) -> tuple[str | None, str | None, str]:
+    resolved_code = region_code
+    if search.comparison_scope == "regional" and resolved_code is None:
+        resolved_code = search.region_code
+    return resolved_code, region_name, build_region_key(resolved_code, region_name)
 
 
 def search_session_view(value: SearchSession) -> SearchSessionView:

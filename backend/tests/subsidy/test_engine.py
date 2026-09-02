@@ -49,7 +49,7 @@ def test_missing_region_returns_unknown() -> None:
     decision = evaluate_subsidy(rules=[rule("110000")], context=context(region_code=None))
 
     assert decision.status == "unknown"
-    assert decision.reason == "需要先选择省市"
+    assert decision.reason == "该报价未提供适用地区，无法匹配地区补贴规则"
 
 
 def test_platform_confirmation_overrides_estimate_only_for_same_sku() -> None:

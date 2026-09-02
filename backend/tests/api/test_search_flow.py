@@ -134,7 +134,30 @@ def test_nationwide_search_uses_and_returns_each_offer_region(client: TestClient
         ("taobao", "440300", "广东省深圳市"),
         ("pdd", "110100", "北京市"),
     ]
+    assert [offer["subsidy_status"] for offer in result["offers"]] == ["confirmed", "unknown", "estimated"]
     assert result["offers"][2]["estimated_final_price_cents"] == 479900
+
+
+def test_nationwide_offer_without_region_does_not_use_another_regions_rule(client: TestClient) -> None:
+    variant_id = client.get("/api/catalog/search", params={"q": "苹果17"}).json()["items"][0]["variants"][0]["id"]
+    session_id = client.post(
+        "/api/search-sessions",
+        json={"variant_id": variant_id, "comparison_scope": "national"},
+    ).json()["id"]
+    fixture_path = Path(__file__).parents[3] / "fixtures" / "pdd" / "search-results.json"
+    payload = json.loads(fixture_path.read_text(encoding="utf-8"))
+    for item in payload["items"]:
+        item["region_code"] = None
+        item["region_name"] = None
+
+    response = client.post(f"/api/search-sessions/{session_id}/offers", json=payload)
+    assert response.status_code == 200
+    result = client.post(f"/api/search-sessions/{session_id}/finalize").json()
+
+    assert len(result["offers"]) == 1
+    assert result["offers"][0]["region_code"] is None
+    assert result["offers"][0]["subsidy_status"] == "unknown"
+    assert result["offers"][0]["estimated_final_price_cents"] is None
 
 
 def test_invalid_search_payload_uses_structured_error(client: TestClient) -> None:

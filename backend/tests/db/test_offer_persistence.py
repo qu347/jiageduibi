@@ -43,7 +43,13 @@ def seeded_variant(db_session: Session) -> ProductVariant:
     return db_session.scalar(select(ProductVariant).where(ProductVariant.storage == "256GB"))
 
 
-def evaluated_offer(platform_sku_id: str | None, price: int) -> EvaluatedOffer:
+def evaluated_offer(
+    platform_sku_id: str | None,
+    price: int,
+    *,
+    region_code: str | None = None,
+    region_name: str | None = None,
+) -> EvaluatedOffer:
     captured_at = datetime.now(UTC)
     return EvaluatedOffer(
         platform="jd",
@@ -65,6 +71,8 @@ def evaluated_offer(platform_sku_id: str | None, price: int) -> EvaluatedOffer:
         category="手机",
         sale_price_cents=price,
         subsidy_status="unknown",
+        region_code=region_code,
+        region_name=region_name,
         match=MatchResult(
             score=100,
             accepted=True,
@@ -118,3 +126,45 @@ def test_missing_platform_sku_uses_deterministic_fallback(
     assert second.id == first.id
     assert first.platform_sku_id.startswith("fallback:")
     assert db_session.scalar(select(func.count(Offer.id))) == 1
+
+
+def test_national_session_updates_same_region_and_preserves_other_regions(
+    db_session: Session,
+    seeded_variant: ProductVariant,
+) -> None:
+    search = create_search_session(
+        db_session,
+        CreateSearchSession(variant_id=seeded_variant.id),
+    )
+
+    shanghai_first = save_evaluated_offer(
+        db_session,
+        search.id,
+        evaluated_offer("sku-1", 519900, region_code="310100", region_name="上海市"),
+    )
+    shanghai_second = save_evaluated_offer(
+        db_session,
+        search.id,
+        evaluated_offer("sku-1", 509900, region_code="310100", region_name="上海市"),
+    )
+    beijing = save_evaluated_offer(
+        db_session,
+        search.id,
+        evaluated_offer("sku-1", 499900, region_code="110100", region_name="北京市"),
+    )
+
+    assert shanghai_second.id == shanghai_first.id
+    assert beijing.id != shanghai_first.id
+    offers = list(db_session.scalars(select(Offer).order_by(Offer.region_key)))
+    assert [(item.region_key, item.comparable_price_cents) for item in offers] == [
+        ("code:110100", 499900),
+        ("code:310100", 509900),
+    ]
+    snapshot_counts = {
+        offer.id: db_session.scalar(
+            select(func.count(PriceSnapshot.id)).where(PriceSnapshot.offer_id == offer.id)
+        )
+        for offer in offers
+    }
+    assert snapshot_counts[shanghai_first.id] == 2
+    assert snapshot_counts[beijing.id] == 1

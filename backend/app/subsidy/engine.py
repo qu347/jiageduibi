@@ -26,7 +26,10 @@ def evaluate_subsidy(
     context: SubsidyContext,
 ) -> SubsidyDecision:
     if context.region_code is None:
-        return SubsidyDecision(status="unknown", reason="需要先选择省市")
+        return SubsidyDecision(
+            status="unknown",
+            reason="该报价未提供适用地区，无法匹配地区补贴规则",
+        )
 
     if (
         context.platform_confirmed

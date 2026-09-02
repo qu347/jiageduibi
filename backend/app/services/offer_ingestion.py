@@ -13,7 +13,7 @@ from app.pricing.calculator import calculate_price
 from app.schemas.offers import MatchResult, MatchTarget, OfferPriceInput, PriceBreakdown, RawOffer
 from app.schemas.search_sessions import EvaluatedOffer, IngestionSummary, PlatformOfferBatch
 from app.schemas.subsidy import SubsidyContext, SubsidyRuleInput
-from app.services.search_sessions import save_evaluated_offer
+from app.services.search_sessions import resolve_offer_region, save_evaluated_offer
 from app.subsidy.engine import evaluate_subsidy
 
 
@@ -29,10 +29,15 @@ def ingest_candidates(db: Session, search_id: int, payload: PlatformOfferBatch) 
         for raw in payload.items:
             if raw.platform != payload.platform:
                 raise ValueError("批次平台与报价平台不一致")
+            region_code, region_name, _region_key = resolve_offer_region(
+                search,
+                raw.region_code,
+                raw.region_name,
+            )
             match = match_offer(raw, target)
             if not match.accepted:
                 exclusions[match.excluded_reason or "low_confidence"] += 1
-                save_excluded(db, search, target, raw, payload, match)
+                save_excluded(db, search, target, raw, payload, match, region_code, region_name)
                 continue
             if raw.sale_price_cents is None:
                 missing = MatchResult(
@@ -43,13 +48,13 @@ def ingest_candidates(db: Session, search_id: int, payload: PlatformOfferBatch) 
                     excluded_reason="missing_price",
                 )
                 exclusions["missing_price"] += 1
-                save_excluded(db, search, target, raw, payload, missing)
+                save_excluded(db, search, target, raw, payload, missing, region_code, region_name)
                 continue
 
             decision = evaluate_subsidy(
                 rules,
                 SubsidyContext(
-                    region_code=raw.region_code or search.region_code,
+                    region_code=region_code,
                     category="手机",
                     platform=raw.platform,
                     shop_type=raw.shop_type,
@@ -77,7 +82,17 @@ def ingest_candidates(db: Session, search_id: int, payload: PlatformOfferBatch) 
             save_evaluated_offer(
                 db,
                 search.id,
-                evaluated(raw, payload, search, target, match, price, decision.status, decision.amount_cents),
+                evaluated(
+                    raw,
+                    payload,
+                    target,
+                    match,
+                    price,
+                    decision.status,
+                    decision.amount_cents,
+                    region_code,
+                    region_name,
+                ),
             )
             accepted_count += 1
 
@@ -169,12 +184,13 @@ def load_rules(db: Session) -> list[SubsidyRuleInput]:
 def evaluated(
     raw: RawOffer,
     batch: PlatformOfferBatch,
-    search: SearchSession,
     target: MatchTarget,
     match: MatchResult,
     price: PriceBreakdown,
     subsidy_status: str,
     subsidy_amount_cents: int,
+    region_code: str | None,
+    region_name: str | None,
 ) -> EvaluatedOffer:
     return EvaluatedOffer(
         platform=batch.platform,
@@ -207,8 +223,8 @@ def evaluated(
         price_type=raw.price_type,
         stock_status=raw.stock_status,
         subsidy_status=subsidy_status,
-        region_code=raw.region_code or search.region_code,
-        region_name=raw.region_name,
+        region_code=region_code,
+        region_name=region_name,
         match=match,
         price=price,
         source_type=batch.source_type,
@@ -224,6 +240,8 @@ def save_excluded(
     raw: RawOffer,
     batch: PlatformOfferBatch,
     match: MatchResult,
+    region_code: str | None,
+    region_name: str | None,
 ) -> None:
     empty_price = PriceBreakdown(
         ordinary_price_cents=0,
@@ -235,5 +253,15 @@ def save_excluded(
     save_evaluated_offer(
         db,
         search.id,
-        evaluated(raw, batch, search, target, match, empty_price, "unknown", 0),
+        evaluated(
+            raw,
+            batch,
+            target,
+            match,
+            empty_price,
+            "unknown",
+            0,
+            region_code,
+            region_name,
+        ),
     )
