@@ -15,6 +15,7 @@ from app.db.models.offers import (
     SearchSession,
     Shop,
 )
+from app.pricing.sorting import sort_offers
 from app.schemas.search_sessions import (
     CreateSearchSession,
     EvaluatedOffer,
@@ -44,10 +45,7 @@ def create_search_session(db: Session, command: CreateSearchSession) -> SearchSe
 
 
 def get_search_session(db: Session, session_id: int) -> SearchSessionView:
-    search = db.get(SearchSession, session_id)
-    if search is None:
-        raise ValueError("搜索会话不存在")
-    return search_session_view(search)
+    return search_session_view(require_search_session(db, session_id))
 
 
 def list_offer_views(db: Session, session_id: int | None = None) -> list[OfferView]:
@@ -64,25 +62,18 @@ def list_offer_views(db: Session, session_id: int | None = None) -> list[OfferVi
 
 
 def finalize_search_session(db: Session, session_id: int) -> SearchResult:
-    search = db.get(SearchSession, session_id)
-    if search is None:
-        raise ValueError("搜索会话不存在")
+    search = require_search_session(db, session_id)
     if search.status == "collecting":
         search.status = "completed"
         search.finalized_at = datetime.now(UTC)
         db.commit()
+    return build_search_result(db, session_id)
 
+
+def build_search_result(db: Session, session_id: int) -> SearchResult:
+    search = require_search_session(db, session_id)
     offers = list_offer_views(db, session_id)
-    ranked = sorted(
-        offers,
-        key=lambda item: (
-            item.comparable_price_cents is None,
-            item.comparable_price_cents if item.comparable_price_cents is not None else 2**63 - 1,
-            {"self_operated": 0, "official_flagship": 1, "authorized": 2, "third_party": 3}[item.shop_type],
-            -int(item.captured_at.timestamp()),
-            item.id,
-        ),
-    )
+    ranked = sort_offers(offers)
     excluded_count = db.scalar(
         select(func.count(Offer.id)).where(
             Offer.search_session_id == session_id,
@@ -96,6 +87,13 @@ def finalize_search_session(db: Session, session_id: int) -> SearchResult:
         offers=ranked,
         excluded_count=excluded_count or 0,
     )
+
+
+def require_search_session(db: Session, session_id: int) -> SearchSession:
+    search = db.get(SearchSession, session_id)
+    if search is None:
+        raise ValueError("搜索会话不存在")
+    return search
 
 
 def fallback_platform_sku(value: EvaluatedOffer) -> str:

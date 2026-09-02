@@ -77,5 +77,6 @@ class PriceBreakdown(BaseModel):
 class ComparableOffer(BaseModel):
     id: int
     comparable_price_cents: int | None = Field(default=None, ge=0)
+    conditional_price_cents: int | None = Field(default=None, ge=0)
     shop_type: Literal["self_operated", "official_flagship", "authorized", "third_party"]
     captured_at: datetime

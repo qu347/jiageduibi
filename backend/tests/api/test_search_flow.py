@@ -54,12 +54,30 @@ def test_fixed_offers_produce_three_sorted_comparable_results(client: TestClient
         response = client.post(f"/api/search-sessions/{session_id}/offers", json=payload)
         assert response.status_code == 200
 
+    preview_response = client.get(f"/api/search-sessions/{session_id}/result")
+    assert preview_response.status_code == 200
+    preview = preview_response.json()
+    assert preview["status"] == "collecting"
+
     result = client.post(f"/api/search-sessions/{session_id}/finalize").json()
 
+    assert [offer["id"] for offer in result["offers"]] == [offer["id"] for offer in preview["offers"]]
     assert [offer["platform"] for offer in result["offers"]] == ["jd", "taobao", "pdd"]
     assert [offer["comparable_price_cents"] for offer in result["offers"]] == [499900, 504900, 509900]
     assert result["offers"][2]["estimated_final_price_cents"] == 479900
     assert result["excluded_count"] == 6
+
+
+def test_missing_search_result_preview_uses_structured_404(client: TestClient) -> None:
+    response = client.get("/api/search-sessions/999999/result")
+
+    assert response.status_code == 404
+    assert set(response.json()["detail"]) == {
+        "what_happened",
+        "possible_cause",
+        "partial_saved",
+        "next_action",
+    }
 
 
 def test_search_scope_is_inferred_and_returned(client: TestClient) -> None:

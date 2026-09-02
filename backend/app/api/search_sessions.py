@@ -11,6 +11,7 @@ from app.schemas.search_sessions import (
 )
 from app.services.offer_ingestion import ingest_candidates
 from app.services.search_sessions import (
+    build_search_result,
     create_search_session,
     finalize_search_session,
     get_search_session,
@@ -46,6 +47,14 @@ def get_session(session_id: int, db: Session = Depends(get_db)) -> SearchSession
         return get_search_session(db, session_id)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=api_error("读取搜索会话失败", str(exc))) from exc
+
+
+@router.get("/{session_id}/result", response_model=SearchResult)
+def get_result(session_id: int, db: Session = Depends(get_db)) -> SearchResult:
+    try:
+        return build_search_result(db, session_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=api_error("预览搜索结果失败", str(exc))) from exc
 
 
 @router.post("/{session_id}/offers", response_model=IngestionSummary)
