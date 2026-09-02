@@ -1,7 +1,12 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 
-import { lowestOfferSummary, offerRegionLabel, selectVisibleOffers } from '../stores/comparison'
+import {
+  limitOffersPerPlatformRegion,
+  lowestOfferSummary,
+  offerRegionLabel,
+  selectVisibleOffers,
+} from '../stores/comparison'
 import type { OfferView, SubsidyStatus } from '../types/offers'
 import OfferDetails from './OfferDetails.vue'
 
@@ -10,9 +15,17 @@ const props = withDefaults(defineProps<{
   includeConditional?: boolean
 }>(), { includeConditional: false })
 
-const visibleOffers = computed(() => selectVisibleOffers(props.offers, {
+const expanded = ref(false)
+const comparableOffers = computed(() => selectVisibleOffers(props.offers, {
   includeConditional: props.includeConditional,
 }))
+const visibleOffers = computed(() => limitOffersPerPlatformRegion(
+  comparableOffers.value,
+  expanded.value ? 10 : 5,
+))
+const hasMore = computed(() => (
+  limitOffersPerPlatformRegion(comparableOffers.value, 5).length < comparableOffers.value.length
+))
 const lowest = computed(() => lowestOfferSummary(visibleOffers.value))
 
 function isLowest(offer: OfferView): boolean {
@@ -40,7 +53,7 @@ function formatMoney(value: number | null): string {
 <template>
   <div class="offer-list" aria-live="polite">
     <p v-if="lowest.price !== null" class="lowest-region-summary" data-testid="lowest-region">
-      最低价地区：{{ lowest.regions.join('、') }}
+      本次已采集范围最低价：{{ lowest.regions.join('、') }}
     </p>
     <p v-else class="no-reliable-price">暂无可靠可比价</p>
     <article
@@ -76,5 +89,12 @@ function formatMoney(value: number | null): string {
         </span>
       </div>
     </article>
+    <button
+      v-if="hasMore"
+      class="expand-region-offers"
+      data-testid="expand-region-offers"
+      type="button"
+      @click="expanded = !expanded"
+    >{{ expanded ? '收起为每地区 5 条' : '展开每地区最多 10 条' }}</button>
   </div>
 </template>

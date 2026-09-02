@@ -24,6 +24,7 @@ from app.schemas.search_sessions import (
     SearchResult,
 )
 from app.services.region_identity import build_region_key
+from app.services.offer_retention import limit_offers_per_platform_region
 
 
 def create_search_session(db: Session, command: CreateSearchSession) -> SearchSessionView:
@@ -73,7 +74,7 @@ def finalize_search_session(db: Session, session_id: int) -> SearchResult:
 def build_search_result(db: Session, session_id: int) -> SearchResult:
     search = require_search_session(db, session_id)
     offers = list_offer_views(db, session_id)
-    ranked = sort_offers(offers)
+    ranked = limit_offers_per_platform_region(sort_offers(offers), limit=10)
     excluded_count = db.scalar(
         select(func.count(Offer.id)).where(
             Offer.search_session_id == session_id,

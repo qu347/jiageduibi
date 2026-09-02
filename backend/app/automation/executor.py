@@ -15,6 +15,7 @@ from app.db.models.automation import CollectionCandidate, CollectionRegionTask
 from app.db.models.offers import SearchSession
 from app.schemas.offers import RawOffer
 from app.services.offer_ingestion import ingest_verified_browser_offer, load_match_target
+from app.services.offer_retention import retain_region_top_offers
 
 
 WAITING_CODES = {"captcha", "login_required"}
@@ -205,6 +206,13 @@ class CollectionExecutor:
             run = require_run(db, run_id)
             if task is None:
                 raise ValueError("地区采集任务不存在")
+            retain_region_top_offers(
+                db,
+                run.search_session_id,
+                "jd",
+                region.region_code,
+                limit=10,
+            )
             task.status = "completed"
             task.finished_at = datetime.now(UTC)
             run.current_region_code = None

@@ -81,7 +81,7 @@ describe('comparison results', () => {
 
     const wrapper = mount(OfferTable, { props: { offers: [cheapest, runnerUp] } })
 
-    expect(wrapper.text()).toContain('最低价地区：上海市、北京市')
+    expect(wrapper.text()).toContain('本次已采集范围最低价：上海市、北京市')
     expect(wrapper.findAll('[data-testid="offer-region"]').map((item) => item.text())).toEqual([
       '适用地区：上海市',
       '适用地区：北京市',
@@ -98,8 +98,30 @@ describe('comparison results', () => {
 
     expect(wrapper.text()).toContain('地区未确认')
     expect(wrapper.text()).toContain('暂无可靠可比价')
-    expect(wrapper.text()).not.toContain('最低价地区')
+    expect(wrapper.text()).not.toContain('本次已采集范围最低价')
     expect(wrapper.findAll('.rank.best')).toHaveLength(0)
     expect(lowestOfferSummary(offers)).toEqual({ price: null, regions: [] })
+  })
+
+  it('shows five per platform-region and expands to ten without resorting', async () => {
+    const offers = Array.from({ length: 10 }, (_value, index) => offer({
+      id: index + 1,
+      platform_sku_id: `sku-${index + 1}`,
+      region_code: '110100',
+      region_name: '北京市',
+      comparable_price_cents: 500000 + index * 100,
+      confirmed_final_price_cents: 500000 + index * 100,
+      source_type: 'browser',
+    }))
+    const wrapper = mount(OfferTable, { props: { offers } })
+
+    expect(wrapper.findAll('[data-testid="offer-row"]')).toHaveLength(5)
+    await wrapper.get('[data-testid="expand-region-offers"]').trigger('click')
+    expect(wrapper.findAll('[data-testid="offer-row"]')).toHaveLength(10)
+    expect(wrapper.findAll('[data-testid="offer-row"]').map((row) => row.attributes('data-offer-id')))
+      .toEqual(offers.map((item) => String(item.id)))
+    expect(wrapper.text()).toContain('浏览器核验')
+    expect(wrapper.text()).toContain('采集时间')
+    expect(wrapper.text()).toContain('本次已采集范围最低价')
   })
 })

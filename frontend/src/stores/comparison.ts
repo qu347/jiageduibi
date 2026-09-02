@@ -27,6 +27,22 @@ export function selectVisibleOffers(
 }
 
 
+export function limitOffersPerPlatformRegion(offers: OfferView[], limit: number): OfferView[] {
+  if (!Number.isInteger(limit) || limit < 1) throw new Error('每个平台地区至少显示一条报价')
+  const counts = new Map<string, number>()
+  return offers.filter((offer) => {
+    const region = offer.region_code
+      ?? offer.region_name?.trim().replace(/\s+/g, ' ').toLocaleLowerCase('zh-CN')
+      ?? 'unknown'
+    const key = `${offer.platform}\u0000${region}`
+    const count = counts.get(key) ?? 0
+    if (count >= limit) return false
+    counts.set(key, count + 1)
+    return true
+  })
+}
+
+
 export function offerRegionLabel(offer: OfferView): string {
   return offer.region_name ?? offer.region_code ?? '地区未确认'
 }
