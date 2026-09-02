@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from sqlalchemy import inspect, make_url
 
 from app.api.catalog import router as catalog_router
+from app.api.extension import router as extension_router
 from app.api.history import router as history_router
 from app.api.offers import router as offers_router
 from app.api.platforms import router as platforms_router
@@ -31,6 +32,7 @@ def create_app(database_url: str | None = None) -> FastAPI:
     app.state.engine = build_engine(configured_database_url)
     app.state.session_factory = session_factory(app.state.engine)
     app.include_router(catalog_router)
+    app.include_router(extension_router)
     app.include_router(history_router)
     app.include_router(search_sessions_router)
     app.include_router(offers_router)

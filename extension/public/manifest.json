@@ -1,0 +1,10 @@
+{
+  "manifest_version": 3,
+  "name": "个人国补比价助手",
+  "version": "0.1.0",
+  "description": "将用户主动打开的商品页报价发送到本机比价工具。",
+  "permissions": ["activeTab", "storage"],
+  "host_permissions": ["http://127.0.0.1/*"],
+  "background": {"service_worker": "background.js", "type": "module"},
+  "action": {"default_popup": "popup/index.html"}
+}
