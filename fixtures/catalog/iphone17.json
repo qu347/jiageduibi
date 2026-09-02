@@ -1,0 +1,39 @@
+{
+  "brands": [
+    {"name": "Apple"}
+  ],
+  "series": [
+    {"brand": "Apple", "name": "iPhone 17 系列"}
+  ],
+  "models": [
+    {
+      "series": "iPhone 17 系列",
+      "name": "iPhone 17",
+      "code": "APPLE_IPHONE_17",
+      "aliases": ["苹果17", "iPhone17", "iPhone 17"]
+    },
+    {
+      "series": "iPhone 17 系列",
+      "name": "iPhone 17 Pro",
+      "code": "APPLE_IPHONE_17_PRO",
+      "aliases": ["苹果17pro", "iPhone17Pro", "iPhone 17 Pro"]
+    },
+    {
+      "series": "iPhone 17 系列",
+      "name": "iPhone 17 Pro Max",
+      "code": "APPLE_IPHONE_17_PRO_MAX",
+      "aliases": ["苹果17promax", "iPhone17ProMax", "iPhone 17 Pro Max"]
+    }
+  ],
+  "variants": [
+    {
+      "model_code": "APPLE_IPHONE_17",
+      "sku_code": "APPLE_IPHONE_17_256_CN_NEW_ANY",
+      "storage": "256GB",
+      "memory": null,
+      "color": "不限",
+      "region_version": "中国大陆国行",
+      "condition": "全新"
+    }
+  ]
+}
