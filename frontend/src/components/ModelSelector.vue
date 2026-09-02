@@ -64,11 +64,13 @@ function chooseModel(modelCode: string) {
         id="keyword"
         v-model="keyword"
         data-test="keyword"
+        data-testid="keyword"
         placeholder="例如：苹果17"
         autocomplete="off"
       />
       <button
         data-test="search-models"
+        data-testid="search-models"
         type="button"
         :disabled="loading || !keyword.trim()"
         @click="searchModels"

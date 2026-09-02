@@ -1,6 +1,8 @@
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import FileResponse, JSONResponse
 from sqlalchemy import inspect, make_url
 
 from app.api.catalog import router as catalog_router
@@ -10,7 +12,7 @@ from app.api.offers import router as offers_router
 from app.api.platforms import router as platforms_router
 from app.api.search_sessions import router as search_sessions_router
 from app.api.subsidy_rules import router as subsidy_rules_router
-from app.core.config import DEFAULT_DATABASE_URL
+from app.core.config import DEFAULT_DATABASE_URL, PROJECT_ROOT
 from app.db.session import build_engine, session_factory
 
 
@@ -31,6 +33,21 @@ def create_app(database_url: str | None = None) -> FastAPI:
     configured_database_url = database_url or DEFAULT_DATABASE_URL
     app.state.engine = build_engine(configured_database_url)
     app.state.session_factory = session_factory(app.state.engine)
+
+    @app.exception_handler(RequestValidationError)
+    async def validation_error(_request: Request, exc: RequestValidationError) -> JSONResponse:
+        causes = [f"{'.'.join(str(part) for part in error['loc'])}: {error['msg']}" for error in exc.errors()]
+        return JSONResponse(
+            status_code=422,
+            content={
+                "detail": {
+                    "what_happened": "请求数据校验失败",
+                    "possible_cause": "; ".join(causes),
+                    "partial_saved": False,
+                    "next_action": "修正标注字段后重新提交",
+                }
+            },
+        )
     app.include_router(catalog_router)
     app.include_router(extension_router)
     app.include_router(history_router)
@@ -49,6 +66,17 @@ def create_app(database_url: str | None = None) -> FastAPI:
                 "ok" if CATALOG_TABLES <= set(inspect(app.state.engine).get_table_names()) else "pending"
             )
         return {"status": "ok", "version": APP_VERSION, "database": database_status}
+
+    frontend_dist = PROJECT_ROOT / "frontend" / "dist"
+    if frontend_dist.is_dir() and (frontend_dist / "index.html").is_file():
+        @app.get("/{full_path:path}", include_in_schema=False)
+        def frontend(full_path: str) -> FileResponse:
+            if full_path.startswith("api/"):
+                raise HTTPException(status_code=404, detail="API route not found")
+            candidate = (frontend_dist / full_path).resolve()
+            if candidate.is_relative_to(frontend_dist.resolve()) and candidate.is_file():
+                return FileResponse(candidate)
+            return FileResponse(frontend_dist / "index.html")
 
     return app
 

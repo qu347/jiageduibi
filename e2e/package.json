@@ -1,0 +1,11 @@
+{
+  "name": "personal-subsidy-price-compare-e2e",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {"test": "playwright test"},
+  "devDependencies": {
+    "@playwright/test": "1.62.1",
+    "typescript": "7.0.2"
+  }
+}

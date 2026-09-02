@@ -60,3 +60,18 @@ def test_fixed_offers_produce_three_sorted_comparable_results(client: TestClient
     assert [offer["comparable_price_cents"] for offer in result["offers"]] == [499900, 504900, 509900]
     assert result["offers"][2]["estimated_final_price_cents"] == 479900
     assert result["excluded_count"] == 6
+
+
+def test_invalid_search_payload_uses_structured_error(client: TestClient) -> None:
+    response = client.post(
+        "/api/search-sessions",
+        json={"variant_id": 0, "region_code": "invalid", "include_conditional": False},
+    )
+
+    assert response.status_code == 422
+    assert set(response.json()["detail"]) == {
+        "what_happened",
+        "possible_cause",
+        "partial_saved",
+        "next_action",
+    }
