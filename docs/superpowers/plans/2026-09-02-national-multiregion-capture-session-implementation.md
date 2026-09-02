@@ -27,8 +27,8 @@
 **文件:**
 - 创建：`backend/app/services/region_identity.py`
 - 创建：`backend/tests/services/test_region_identity.py`
+- 创建：`backend/tests/services/test_search_session_scope.py`
 - 修改：`backend/app/schemas/search_sessions.py`
-- 修改：`backend/tests/api/test_search_flow.py`
 
 **接口:**
 - 产出：`normalize_region_name(value: str) -> str`
@@ -77,27 +77,29 @@ def build_region_key(region_code: str | None, region_name: str | None) -> str:
     return "unknown"
 ```
 
-- [ ] **步骤 4：写会话范围 API 失败测试**
+- [ ] **步骤 4：写会话范围请求模型失败测试**
 
 ```python
-def test_scope_is_inferred_and_conflicts_are_rejected(client):
-    national = client.post("/api/search-sessions", json={"variant_id": 1, "region_code": None, "include_conditional": False})
-    regional = client.post("/api/search-sessions", json={"variant_id": 1, "region_code": "310100", "include_conditional": False})
-    assert national.json()["comparison_scope"] == "national"
-    assert regional.json()["comparison_scope"] == "regional"
-    assert client.post("/api/search-sessions", json={"variant_id": 1, "comparison_scope": "national", "region_code": "310100"}).status_code == 422
-    assert client.post("/api/search-sessions", json={"variant_id": 1, "comparison_scope": "regional", "region_code": None}).status_code == 422
+def test_scope_is_inferred_from_region():
+    assert CreateSearchSession(variant_id=1).comparison_scope == "national"
+    assert CreateSearchSession(variant_id=1, region_code="310100").comparison_scope == "regional"
+
+def test_scope_conflicts_are_rejected():
+    with pytest.raises(ValidationError, match="全国会话不能设置统一地区"):
+        CreateSearchSession(variant_id=1, comparison_scope="national", region_code="310100")
+    with pytest.raises(ValidationError, match="地区会话必须设置地区"):
+        CreateSearchSession(variant_id=1, comparison_scope="regional")
 ```
 
 - [ ] **步骤 5：运行会话测试确认 RED**
 
-运行：`Push-Location backend; .\.venv\Scripts\python.exe -m pytest tests\api\test_search_flow.py -v; Pop-Location`
+运行：`Push-Location backend; .\.venv\Scripts\python.exe -m pytest tests\services\test_search_session_scope.py -v; Pop-Location`
 
-预期：响应缺少 `comparison_scope`，冲突输入未按新契约处理。
+预期：请求模型缺少 `comparison_scope`。
 
 - [ ] **步骤 6：实现 Pydantic 推断与冲突校验**
 
-在 `CreateSearchSession` 使用 `model_validator(mode="after")`：缺省范围按 `region_code` 推断，显式冲突抛出 `ValueError`；`SearchSessionView` 和 `SearchResult` 始终返回非空范围。
+在 `CreateSearchSession` 使用 `model_validator(mode="after")`：缺省范围按 `region_code` 推断，显式冲突抛出 `ValueError`。`SearchSessionView` 和 `SearchResult` 的响应字段在任务 2 与数据库列一起加入。
 
 ```python
 comparison_scope: Literal["national", "regional"] | None = None
@@ -115,7 +117,7 @@ def resolve_scope(self):
 
 - [ ] **步骤 7：运行任务 1 测试并提交**
 
-运行：`Push-Location backend; .\.venv\Scripts\python.exe -m pytest tests\services\test_region_identity.py tests\api\test_search_flow.py -v; Pop-Location`
+运行：`Push-Location backend; .\.venv\Scripts\python.exe -m pytest tests\services\test_region_identity.py tests\services\test_search_session_scope.py -v; Pop-Location`
 
 提交：`git commit -am "feat(domain): define comparison scope and region identity"`，并显式 `git add` 新测试和模块。
 
@@ -127,6 +129,9 @@ def resolve_scope(self):
 - 创建：`backend/alembic/versions/0005_national_multiregion_sessions.py`
 - 创建：`backend/tests/db/test_multiregion_migration.py`
 - 修改：`backend/app/db/models/offers.py`
+- 修改：`backend/app/schemas/search_sessions.py`
+- 修改：`backend/app/services/search_sessions.py`
+- 修改：`backend/tests/api/test_search_flow.py`
 
 **接口:**
 - 消费：`build_region_key(...)`
@@ -134,9 +139,9 @@ def resolve_scope(self):
 - 产出：`Offer.region_key`
 - 产出：唯一约束 `uq_offers_session_platform_sku_region`
 
-- [ ] **步骤 1：写迁移失败测试**
+- [ ] **步骤 1：写迁移与 API 响应失败测试**
 
-测试从 `0004_offer_regions` 建库并插入旧会话/报价，升级后断言：空地区会话为 `national`、有地区会话为 `regional`、报价为 `code:310100`、新列非空且新唯一约束允许同 SKU 不同 `region_key`。另建两个不同地区身份的同 SKU 报价，断言降级抛出 `RuntimeError("存在跨地区重复报价")` 且两条报价仍存在。
+测试从 `0004_offer_regions` 建库并插入旧会话/报价，升级后断言：空地区会话为 `national`、有地区会话为 `regional`、报价为 `code:310100`、新列非空且新唯一约束允许同 SKU 不同 `region_key`。另建两个不同地区身份的同 SKU 报价，断言降级抛出 `RuntimeError("存在跨地区重复报价")` 且两条报价仍存在。API 测试断言旧调用推断后的响应始终返回明确 `comparison_scope`，冲突请求返回结构化 422。
 
 - [ ] **步骤 2：运行迁移测试确认 RED**
 

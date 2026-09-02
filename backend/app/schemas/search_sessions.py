@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.schemas.offers import MatchResult, PriceBreakdown, RawOffer
 
@@ -11,7 +11,18 @@ class CreateSearchSession(BaseModel):
 
     variant_id: int = Field(gt=0)
     region_code: str | None = Field(default=None, pattern=r"^\d{6,12}$")
+    comparison_scope: Literal["national", "regional"] | None = None
     include_conditional: bool = False
+
+    @model_validator(mode="after")
+    def resolve_comparison_scope(self) -> "CreateSearchSession":
+        scope = self.comparison_scope or ("regional" if self.region_code else "national")
+        if scope == "national" and self.region_code is not None:
+            raise ValueError("全国会话不能设置统一地区")
+        if scope == "regional" and self.region_code is None:
+            raise ValueError("地区会话必须设置地区")
+        self.comparison_scope = scope
+        return self
 
 
 class SearchSessionView(BaseModel):
