@@ -38,4 +38,3 @@ class CollectionCoordinator:
         finally:
             with self._lock:
                 self._submitted.discard(run_id)
-

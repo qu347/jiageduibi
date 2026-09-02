@@ -59,4 +59,3 @@ def test_coordinator_releases_run_id_after_execution() -> None:
             raise AssertionError("已完成的采集任务编号没有释放")
     finally:
         coordinator.close()
-
