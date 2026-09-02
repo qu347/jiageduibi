@@ -29,6 +29,7 @@ class SearchSessionView(BaseModel):
     id: int
     variant_id: int
     region_code: str | None
+    comparison_scope: Literal["national", "regional"]
     include_conditional: bool
     status: str
     created_at: datetime
@@ -120,5 +121,6 @@ class IngestionSummary(BaseModel):
 class SearchResult(BaseModel):
     id: int
     status: str
+    comparison_scope: Literal["national", "regional"]
     offers: list[OfferView]
     excluded_count: int

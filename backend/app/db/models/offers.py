@@ -48,6 +48,7 @@ class SearchSession(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     variant_id: Mapped[int] = mapped_column(ForeignKey("product_variants.id"), index=True)
     region_code: Mapped[str | None] = mapped_column(String(12))
+    comparison_scope: Mapped[str] = mapped_column(String(16))
     include_conditional: Mapped[bool] = mapped_column(Boolean, default=False)
     status: Mapped[str] = mapped_column(String(24), default="collecting")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
@@ -61,7 +62,8 @@ class Offer(Base):
             "search_session_id",
             "platform_id",
             "platform_sku_id",
-            name="uq_offers_session_platform_sku",
+            "region_key",
+            name="uq_offers_session_platform_sku_region",
         ),
     )
 
@@ -102,6 +104,7 @@ class Offer(Base):
     subsidy_status: Mapped[str] = mapped_column(String(24), default="unknown")
     region_code: Mapped[str | None] = mapped_column(String(12))
     region_name: Mapped[str | None] = mapped_column(String(120))
+    region_key: Mapped[str] = mapped_column(String(180), server_default="unknown")
     match_confidence: Mapped[int] = mapped_column(Integer)
     source_type: Mapped[str] = mapped_column(String(32))
     adapter_version: Mapped[str] = mapped_column(String(80))

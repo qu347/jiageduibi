@@ -62,6 +62,48 @@ def test_fixed_offers_produce_three_sorted_comparable_results(client: TestClient
     assert result["excluded_count"] == 6
 
 
+def test_search_scope_is_inferred_and_returned(client: TestClient) -> None:
+    variant_id = client.get("/api/catalog/search", params={"q": "苹果17"}).json()["items"][0]["variants"][0]["id"]
+
+    national = client.post(
+        "/api/search-sessions",
+        json={"variant_id": variant_id, "region_code": None, "include_conditional": False},
+    )
+    regional = client.post(
+        "/api/search-sessions",
+        json={"variant_id": variant_id, "region_code": "310100", "include_conditional": False},
+    )
+
+    assert national.status_code == 201
+    assert national.json()["comparison_scope"] == "national"
+    assert regional.status_code == 201
+    assert regional.json()["comparison_scope"] == "regional"
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"comparison_scope": "national", "region_code": "310100"},
+        {"comparison_scope": "regional", "region_code": None},
+    ],
+)
+def test_search_scope_conflicts_use_structured_422(client: TestClient, payload: dict[str, object]) -> None:
+    variant_id = client.get("/api/catalog/search", params={"q": "苹果17"}).json()["items"][0]["variants"][0]["id"]
+
+    response = client.post(
+        "/api/search-sessions",
+        json={"variant_id": variant_id, "include_conditional": False, **payload},
+    )
+
+    assert response.status_code == 422
+    assert set(response.json()["detail"]) == {
+        "what_happened",
+        "possible_cause",
+        "partial_saved",
+        "next_action",
+    }
+
+
 def test_nationwide_search_uses_and_returns_each_offer_region(client: TestClient) -> None:
     variant_id = client.get("/api/catalog/search", params={"q": "苹果17"}).json()["items"][0]["variants"][0]["id"]
     session_response = client.post(

@@ -31,6 +31,7 @@ def create_search_session(db: Session, command: CreateSearchSession) -> SearchSe
     search = SearchSession(
         variant_id=command.variant_id,
         region_code=command.region_code,
+        comparison_scope=command.comparison_scope,
         include_conditional=command.include_conditional,
         status="collecting",
         created_at=now,
@@ -90,6 +91,7 @@ def finalize_search_session(db: Session, session_id: int) -> SearchResult:
     return SearchResult(
         id=search.id,
         status=search.status,
+        comparison_scope=search.comparison_scope,
         offers=ranked,
         excluded_count=excluded_count or 0,
     )
