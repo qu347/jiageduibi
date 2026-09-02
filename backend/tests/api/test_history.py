@@ -10,6 +10,7 @@ def test_history_returns_snapshots_in_time_order(
 
     assert response.status_code == 200
     points = response.json()["points"]
-    assert len(points) == 3
+    assert len(points) == 4
+    assert [point["comparable_price_cents"] for point in points] == [499900, 504900, 509900, 519900]
     assert [point["captured_at"] for point in points] == sorted(point["captured_at"] for point in points)
     assert all(point["offer_id"] for point in points)
