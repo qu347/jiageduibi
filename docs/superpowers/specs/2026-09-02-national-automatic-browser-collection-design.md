@@ -66,6 +66,7 @@ SQLite 持久任务队列 ←→ 单进程顺序执行器
 
 - `queued`：等待执行；
 - `running`：正在搜索或核验；
+- `paused`：用户主动暂停，保留当前进度并等待继续；
 - `waiting_user`：等待用户完成登录或验证码；
 - `completed`：31 个地区均完成；
 - `completed_partial`：执行结束但存在失败或跳过地区；
