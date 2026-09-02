@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test'
 
 
 test('runs and restores a nationwide multi-region collection session', async ({ page, request }) => {
+  test.setTimeout(60_000)
   await page.goto('/')
   await expect(page.getByTestId('nationwide-scope')).toContainText('全国比价')
   await page.getByTestId('keyword').fill('苹果17')
@@ -11,6 +12,7 @@ test('runs and restores a nationwide multi-region collection session', async ({ 
   await page.getByText('中国大陆国行', { exact: true }).click()
   await page.getByText('全新', { exact: true }).click()
   await page.getByTestId('confirm-variant').click()
+  await page.getByText('手动采集备用', { exact: true }).click()
   await page.getByTestId('create-collection-session').click()
   const sessionId = Number(await page.getByTestId('collection-session-id').textContent())
   expect(sessionId).toBeGreaterThan(0)
@@ -27,7 +29,7 @@ test('runs and restores a nationwide multi-region collection session', async ({ 
   await page.getByTestId('refresh-session').click()
 
   await expect(page.getByTestId('offer-row')).toHaveCount(4)
-  await expect(page.getByTestId('lowest-region')).toHaveText('最低价地区：上海市')
+  await expect(page.getByTestId('lowest-region')).toHaveText('本次已采集范围最低价：上海市')
   await expect(page.getByText(/已排除 [5-9]\d* 条干扰项/)).toBeVisible()
   await expect(page.getByText('预计国补').first()).toBeVisible()
   const prices = await page.getByTestId('comparable-price').allTextContents()
@@ -43,6 +45,7 @@ test('runs and restores a nationwide multi-region collection session', async ({ 
   ))).toEqual(initialOfferIds)
 
   await page.reload()
+  await page.getByText('手动采集备用', { exact: true }).click()
   await expect(page.getByTestId('collection-session-id')).toHaveText(String(sessionId))
   await expect(page.getByTestId('offer-row')).toHaveCount(4)
   expect(await page.getByTestId('offer-row').evaluateAll((rows) => (

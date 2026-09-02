@@ -5,6 +5,12 @@ $pythonPath = Join-Path $backendRoot '.venv\Scripts\python.exe'
 
 & (Join-Path $PSScriptRoot 'build.ps1')
 
+$pluginTestRoot = Join-Path $projectRoot 'opencli-plugin-price-compare-jd\tests'
+$pluginTests = @(Get-ChildItem -LiteralPath $pluginTestRoot -Filter '*.test.mjs' -File | ForEach-Object FullName)
+if ($pluginTests.Count -eq 0) { throw 'No OpenCLI plugin tests found' }
+node --test $pluginTests
+if ($LASTEXITCODE -ne 0) { throw 'OpenCLI plugin tests failed' }
+
 Push-Location $backendRoot
 try {
     & $pythonPath -m pytest -v

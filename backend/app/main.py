@@ -1,5 +1,6 @@
 from pathlib import Path
 from collections.abc import Callable
+import os
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
@@ -18,6 +19,7 @@ from app.core.config import DEFAULT_DATABASE_URL, PROJECT_ROOT
 from app.automation.contracts import BrowserGateway
 from app.automation.coordinator import CollectionCoordinator
 from app.automation.executor import CollectionExecutor
+from app.automation.fixture_gateway import FixtureBrowserGateway
 from app.automation.opencli import OpenCliGateway, SubprocessCommandRunner
 from app.automation.run_service import recover_interrupted_runs
 from app.db.session import build_engine, session_factory
@@ -46,9 +48,7 @@ def create_app(
     configured_database_url = database_url or DEFAULT_DATABASE_URL
     app.state.engine = build_engine(configured_database_url)
     app.state.session_factory = session_factory(app.state.engine)
-    app.state.browser_gateway_factory = browser_gateway_factory or (
-        lambda: OpenCliGateway(SubprocessCommandRunner())
-    )
+    app.state.browser_gateway_factory = browser_gateway_factory or _default_browser_gateway_factory
     queued_run_ids: list[int] = []
     if "collection_runs" in inspect(app.state.engine).get_table_names():
         with app.state.session_factory() as db:
@@ -117,6 +117,12 @@ def create_app(
             return FileResponse(frontend_dist / "index.html")
 
     return app
+
+
+def _default_browser_gateway_factory() -> BrowserGateway:
+    if os.environ.get("PRICE_COMPARE_AUTOMATION_FIXTURE") == "1":
+        return FixtureBrowserGateway()
+    return OpenCliGateway(SubprocessCommandRunner())
 
 
 app = create_app()
