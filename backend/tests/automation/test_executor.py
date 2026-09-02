@@ -293,3 +293,27 @@ def test_stop_keeps_committed_offer_and_skips_unfinished_regions(
         )
     )
     assert skipped == 31
+
+
+def test_idle_stop_request_finishes_without_opening_browser(
+    database: tuple[sessionmaker[Session], Session],
+    run_id: int,
+) -> None:
+    _factory, db = database
+    gateway = FakeGateway()
+    request_stop(db, run_id)
+    db.commit()
+
+    execute_with(database, gateway, run_id)
+    refresh(db)
+
+    assert gateway.discover_calls == []
+    assert gateway.verify_calls == []
+    assert get_run(db, run_id).status == "stopped"
+    skipped = db.scalar(
+        select(func.count(CollectionRegionTask.id)).where(
+            CollectionRegionTask.collection_run_id == run_id,
+            CollectionRegionTask.status == "skipped",
+        )
+    )
+    assert skipped == 31

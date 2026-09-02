@@ -112,8 +112,14 @@ def resume_collection_run(
 
 
 @router.post("/collection-runs/{run_id}/stop", response_model=CollectionRunView)
-def stop_collection_run(run_id: int, db: Session = Depends(get_db)) -> CollectionRunView:
-    return _control(db, run_id, request_stop, "停止自动采集失败")
+def stop_collection_run(
+    run_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> CollectionRunView:
+    result = _control(db, run_id, request_stop, "停止自动采集失败")
+    _coordinator(request).submit(run_id)
+    return result
 
 
 @router.post("/collection-runs/{run_id}/retry-failed", response_model=CollectionRunView)

@@ -97,7 +97,7 @@ def test_run_controls_are_idempotent_and_resume_resubmits(
     assert client.post(f"/api/collection-runs/{run_id}/resume").status_code == 200
     assert client.post(f"/api/collection-runs/{run_id}/resume").status_code == 200
     assert client.post(f"/api/collection-runs/{run_id}/stop").status_code == 200
-    assert coordinator.submitted == [run_id, run_id, run_id]
+    assert coordinator.submitted == [run_id, run_id, run_id, run_id]
 
 
 def test_duplicate_and_missing_runs_use_structured_safe_errors(
