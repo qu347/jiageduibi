@@ -7,6 +7,7 @@ from sqlalchemy import engine_from_config, pool
 
 from app.db.base import Base
 from app.db.models import catalog as _catalog
+from app.db.models import offers as _offers
 
 
 config = context.config
