@@ -115,6 +115,21 @@ a { color: inherit; text-decoration: none; }
 .confirmed-sku { display: grid; gap: 6px; border: 1px solid #b9d9ca; background: #f1faf5; border-radius: 14px; padding: 16px; }
 .confirmed-sku span { color: var(--green); font-size: 11px; font-weight: 800; }
 .confirmed-sku small { color: var(--muted); }
+.collection-session-card { margin-top: 14px; padding: 16px; border: 1px solid #ccd7d0; border-radius: 14px; background: #fbfcfb; }
+.collection-session-heading { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
+.collection-session-heading h3 { margin: 4px 0 0; font-size: 15px; }
+.session-status { padding: 5px 9px; border-radius: 999px; background: #eef1ef; color: var(--muted); font-size: 11px; font-weight: 800; white-space: nowrap; }
+.session-status.collecting { background: var(--green-soft); color: var(--green-dark); }
+.session-status.completed { background: #edf1ff; color: #4156a6; }
+.session-identity { display: grid; grid-template-columns: .7fr .7fr 2fr; gap: 10px; margin-top: 14px; }
+.session-identity > div { min-width: 0; display: grid; gap: 4px; padding: 10px; border-radius: 9px; background: white; }
+.session-identity span { color: var(--muted); font-size: 10px; }
+.session-identity strong, .session-identity code { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 12px; }
+.session-empty { margin: 12px 0 0; color: var(--muted); font-size: 12px; line-height: 1.6; }
+.collection-session-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.collection-session-actions button { min-width: 0; border: 1px solid #b9d9ca; border-radius: 9px; padding: 8px 11px; color: var(--green-dark); background: white; font-size: 12px; font-weight: 750; }
+.collection-session-actions button:first-child { color: white; border-color: var(--green); background: var(--green); }
+.fixture-disclaimer { margin: 8px 0 0; color: var(--muted); text-align: center; font-size: 11px; }
 .primary-action { width: 100%; margin-top: 18px; }
 .comparison-results { min-width: 0; }
 .result-summary { display: flex; justify-content: space-between; gap: 12px; padding: 11px 14px; border-radius: 10px; background: #f4f8f6; margin-bottom: 10px; font-size: 13px; }
@@ -195,4 +210,7 @@ footer { text-align: center; color: var(--muted); font-size: 12px; padding: 20px
   .nav-links a:nth-child(2) { display: none; }
   .workspace, .simple-page { padding: 28px 14px 50px; }
   .keyword-row { grid-template-columns: 1fr; }
+  .session-identity { grid-template-columns: 1fr; }
+  .collection-session-actions { align-items: stretch; }
+  .collection-session-actions button { flex: 1 1 calc(50% - 8px); }
 }

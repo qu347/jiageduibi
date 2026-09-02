@@ -1,18 +1,19 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { storeToRefs } from 'pinia'
 
 import FilterPanel from '../components/FilterPanel.vue'
 import ModelSelector from '../components/ModelSelector.vue'
 import OfferTable from '../components/OfferTable.vue'
 import ErrorNotice from '../components/ErrorNotice.vue'
+import CollectionSessionCard from '../components/CollectionSessionCard.vue'
 import { useCatalogStore } from '../stores/catalog'
 import { loadFixtureBatches, normalizeApiError, useComparisonStore } from '../stores/comparison'
 
 const catalog = useCatalogStore()
 const { confirmedVariant } = storeToRefs(catalog)
 const comparison = useComparisonStore()
-const { offers, excludedCount, loading, error } = storeToRefs(comparison)
+const { offers, excludedCount, loading, error, session, restoreMessage } = storeToRefs(comparison)
 const includeConditional = ref(false)
 
 async function runFixtureComparison() {
@@ -29,6 +30,18 @@ async function runFixtureComparison() {
     comparison.error = normalizeApiError(caught)
   }
 }
+
+async function createCollectionSession() {
+  if (!confirmedVariant.value) return
+  await comparison.createCollectionSession(confirmedVariant.value.id, includeConditional.value)
+}
+
+async function copySessionId() {
+  if (!session.value) return
+  await navigator.clipboard.writeText(String(session.value.id))
+}
+
+onMounted(() => comparison.restoreCollectionSession())
 </script>
 
 <template>
@@ -58,6 +71,17 @@ async function runFixtureComparison() {
           <strong>{{ confirmedVariant.storage }} · {{ confirmedVariant.region_version }} · {{ confirmedVariant.condition }}</strong>
           <small>{{ confirmedVariant.sku_code }}</small>
         </div>
+        <p v-if="restoreMessage" class="message">{{ restoreMessage }}</p>
+        <CollectionSessionCard
+          :session="session"
+          :sku="confirmedVariant"
+          :loading="loading"
+          @create="createCollectionSession"
+          @recreate="createCollectionSession"
+          @copy="copySessionId"
+          @refresh="comparison.refreshCollectionSession()"
+          @finalize="comparison.finalizeCollectionSession()"
+        />
         <ErrorNotice v-if="error" :error="error" />
         <div v-else-if="!confirmedVariant" class="empty-state">
           <div class="empty-icon">¥</div>
@@ -86,6 +110,7 @@ async function runFixtureComparison() {
         >
           {{ loading ? '正在汇总三平台报价…' : offers.length ? '重新运行离线比价' : '运行三平台离线比价' }}
         </button>
+        <p class="fixture-disclaimer">固定夹具，不代表真实平台价格；用于离线验证完整流程。</p>
       </section>
     </div>
   </main>
