@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from logging.config import fileConfig
 
 from alembic import context
@@ -14,6 +15,8 @@ from app.db.models import subsidy as _subsidy
 
 
 config = context.config
+if database_url := os.environ.get("PRICE_COMPARE_DATABASE_URL"):
+    config.set_main_option("sqlalchemy.url", database_url)
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)

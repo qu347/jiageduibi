@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import time
 from collections.abc import Callable
 from datetime import UTC, datetime
@@ -22,6 +23,9 @@ WAITING_CODES = {"captcha", "login_required"}
 RETRYABLE_CODES = {"network_error"}
 TASK_FAILURE_CODES = {"page_changed", "unsupported_region", "invalid_output", "empty_result"}
 RUN_FAILURE_CODES = {"tool_unavailable"}
+
+
+logger = logging.getLogger(__name__)
 
 
 class CollectionExecutor:
@@ -54,6 +58,7 @@ class CollectionExecutor:
         except GatewayFailure as exc:
             self._handle_run_gateway_failure(run_id, exc)
         except Exception:
+            logger.exception("Automatic collection run %s failed", run_id)
             self._fail_run(run_id, "internal_error", "自动采集发生内部错误")
             raise
 

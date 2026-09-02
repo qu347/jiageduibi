@@ -18,7 +18,7 @@
 
 ## Offline E2E
 
-`pnpm --dir e2e test` 使用本机 Edge，自动启动 FastAPI，并仅为该测试进程设置 `PRICE_COMPARE_AUTOMATION_FIXTURE=1`。测试从“苹果17”确认精确 SKU，启动 31 地区京东任务，验证暂停、恢复、31/31 完成、每地区 Top5 和刷新恢复；原有手动会话与四条多地区夹具流程继续独立回归。
+`pnpm --dir e2e test` 使用本机 Edge，自动启动 FastAPI，并仅为该测试进程设置 `PRICE_COMPARE_AUTOMATION_FIXTURE=1` 和独立的系统临时 SQLite。测试从“苹果17”确认精确 SKU，启动 31 地区京东任务，验证暂停、恢复、31/31 完成、每地区 Top5 和刷新恢复；原有手动会话与四条多地区夹具流程继续独立回归。
 
 ## Manual Live Acceptance
 

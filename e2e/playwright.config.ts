@@ -1,4 +1,12 @@
 import { defineConfig } from '@playwright/test'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
+
+const e2eDatabasePath = join(
+  tmpdir(),
+  `personal-price-compare-e2e-${process.pid}-${Date.now()}.db`,
+).replaceAll('\\', '/')
 
 export default defineConfig({
   testDir: './tests',
@@ -14,6 +22,7 @@ export default defineConfig({
     env: {
       PRICE_COMPARE_AUTOMATION_FIXTURE: '1',
       PRICE_COMPARE_AUTOMATION_FIXTURE_DELAY_MS: '20',
+      PRICE_COMPARE_DATABASE_URL: `sqlite:///${e2eDatabasePath}`,
     },
   },
 })
