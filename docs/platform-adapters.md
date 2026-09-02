@@ -2,7 +2,7 @@
 
 ## Adapter Contract
 
-解析器实现 `canHandle(URL)` 与 `parse(Document, URL)`，只返回白名单商品字段。成功结果含平台、标题、平台商品/SKU、店铺、URL、整数分价和采集时间。
+解析器实现 `canHandle(URL)` 与 `parse(Document, URL)`，只返回白名单商品字段。成功结果含平台、标题、平台商品/SKU、店铺、URL、整数分价、适用地区和采集时间。同一平台 SKU 可按不同 `region_key` 独立保存。
 
 ## JD Fixture
 
@@ -22,4 +22,4 @@
 
 ## Live Validation Not Completed
 
-真实京东、淘宝/天猫和拼多多选择器仍需用户登录后的逐平台手工验收。平台状态 API 因此保持 `live_status=not_validated`。
+真实京东、淘宝/天猫和拼多多选择器、页面地区识别及结算口径仍需用户登录后的逐平台手工验收。平台状态 API 因此保持 `live_status=not_validated`。阶段 2 开始前必须先完成这些人工样本，并确认页面能稳定提供报价适用地区。

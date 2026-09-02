@@ -4,9 +4,11 @@
 
 真实页面采集必须由用户在当前活动标签页点击扩展按钮触发。工具不执行后台轮询、批量爬取或跨标签页遍历。
 
+全国采集会话只汇总用户已经打开并主动采集的地区报价。未采集地区没有数据，不得推断为全国最低或全国有货。
+
 ## Prohibited Data
 
-禁止读取或保存密码输入、Cookie、浏览历史、支付信息、收货地址和账号令牌。扩展清单不得加入 `cookies`、`history` 或平台通配域名权限。
+禁止读取或保存密码输入、Cookie、浏览历史、支付信息、收货地址、页面 HTML 和账号令牌。扩展清单不得加入 `cookies`、`history` 或平台通配域名权限；持久化键仅限 `backendUrl`、`extensionToken`、`searchSessionId`。
 
 ## Login and CAPTCHA
 

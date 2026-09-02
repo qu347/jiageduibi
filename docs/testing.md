@@ -2,7 +2,7 @@
 
 ## Backend
 
-在 `backend` 目录运行 `.\.venv\Scripts\python.exe -m pytest -v`。测试覆盖迁移、目录、匹配、价格、补贴、去重、完整三平台流程、历史、状态与扩展鉴权。
+在 `backend` 目录运行 `.\.venv\Scripts\python.exe -m pytest -v`。测试覆盖多地区迁移与安全降级、目录、匹配、价格、逐报价补贴、四字段去重、预览/完成共享排序、历史、状态与扩展鉴权。
 
 ## Frontend
 
@@ -10,11 +10,11 @@
 
 ## Extension
 
-运行 `pnpm --dir extension test` 与 `pnpm --dir extension build`。测试覆盖 URL 路由、三个固定解析器、缺价失败、Cookie/密码边界和配对存储。
+运行 `pnpm --dir extension test` 与 `pnpm --dir extension build`。测试覆盖 URL 路由、三个固定解析器、缺价失败、会话保存与校验、幂等内容脚本、权限/敏感字段边界和配对存储。
 
 ## Offline E2E
 
-`pnpm --dir e2e test` 使用本机 Edge，自动启动生产 FastAPI 服务；从“苹果17”确认精确 SKU，得到三条排序报价，随后刷新并检查历史最低价。
+`pnpm --dir e2e test` 使用本机 Edge，自动启动生产 FastAPI 服务；从“苹果17”确认精确 SKU，创建全国采集会话，导入四条多地区报价，验证条件价不重排、刷新恢复、完成后拒绝提交，并独立运行固定夹具演示。
 
 ## Manual Live Acceptance
 

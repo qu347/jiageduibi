@@ -48,6 +48,7 @@ function formatMoney(value: number | null): string {
       :key="offer.id"
       class="offer-row"
       data-testid="offer-row"
+      :data-offer-id="offer.id"
     >
       <div class="rank" :class="{ best: isLowest(offer) }">{{ isLowest(offer) ? '最低' : index + 1 }}</div>
       <div class="offer-main">
