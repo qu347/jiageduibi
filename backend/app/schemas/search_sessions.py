@@ -59,6 +59,7 @@ class EvaluatedOffer(BaseModel):
     stock_status: str = "unknown"
     subsidy_status: Literal["confirmed", "estimated", "unknown", "ineligible"] = "unknown"
     region_code: str | None = None
+    region_name: str | None = None
     match: MatchResult
     price: PriceBreakdown
     source_type: str
@@ -80,6 +81,8 @@ class OfferView(BaseModel):
     estimated_final_price_cents: int | None
     conditional_price_cents: int | None
     subsidy_status: str
+    region_code: str | None
+    region_name: str | None
     match_confidence: int
     excluded_reason: str | None
     captured_at: datetime

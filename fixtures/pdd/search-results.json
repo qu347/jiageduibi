@@ -13,6 +13,8 @@
       "shop_name": "品牌授权店",
       "shop_type": "authorized",
       "product_url": "https://example.invalid/pdd/pdd-phone-1",
+      "region_code": "110100",
+      "region_name": "北京市",
       "sale_price_cents": 509900,
       "color": "蓝色",
       "captured_at": "2026-09-02T01:02:00Z"

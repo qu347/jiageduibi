@@ -13,7 +13,6 @@ const catalog = useCatalogStore()
 const { confirmedVariant } = storeToRefs(catalog)
 const comparison = useComparisonStore()
 const { offers, excludedCount, loading, error } = storeToRefs(comparison)
-const regionCode = ref('110100')
 const includeConditional = ref(false)
 
 async function runFixtureComparison() {
@@ -22,7 +21,7 @@ async function runFixtureComparison() {
     const batches = await loadFixtureBatches()
     await comparison.createAndFinalizeSearch({
       variant_id: confirmedVariant.value.id,
-      region_code: regionCode.value || null,
+      region_code: null,
       include_conditional: includeConditional.value,
     }, batches)
   } catch (caught) {
@@ -45,7 +44,7 @@ async function runFixtureComparison() {
     <ModelSelector />
 
     <div class="workbench-grid">
-      <FilterPanel v-model:region-code="regionCode" v-model:include-conditional="includeConditional" />
+      <FilterPanel v-model:include-conditional="includeConditional" />
       <section class="results-placeholder" :class="{ 'has-results': offers.length }">
         <div class="section-heading">
           <div>

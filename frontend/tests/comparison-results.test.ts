@@ -1,6 +1,7 @@
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 
+import FilterPanel from '../src/components/FilterPanel.vue'
 import OfferTable from '../src/components/OfferTable.vue'
 import { selectVisibleOffers } from '../src/stores/comparison'
 import type { OfferView } from '../src/types/offers'
@@ -21,6 +22,8 @@ function offer(changes: Partial<OfferView>): OfferView {
     estimated_final_price_cents: null,
     conditional_price_cents: null,
     subsidy_status: 'unknown',
+    region_code: null,
+    region_name: null,
     match_confidence: 100,
     excluded_reason: null,
     captured_at: '2026-09-02T00:00:00Z',
@@ -50,5 +53,34 @@ describe('comparison results', () => {
     ], { includeConditional: false })
 
     expect(visible.map((item) => item.id)).toEqual([1, 2])
+  })
+
+  it('shows nationwide scope instead of a city selector', () => {
+    const wrapper = mount(FilterPanel, {
+      props: { includeConditional: false },
+    })
+
+    expect(wrapper.text()).toContain('全国比价')
+    expect(wrapper.find('select').exists()).toBe(false)
+  })
+
+  it('shows the applicable region on the cheapest offer only', () => {
+    const cheapest = offer({
+      id: 1,
+      comparable_price_cents: 499900,
+      region_code: '310100',
+      region_name: '上海市',
+    })
+    const runnerUp = offer({
+      id: 2,
+      comparable_price_cents: 504900,
+      region_code: '440300',
+      region_name: '广东省深圳市',
+    })
+
+    const wrapper = mount(OfferTable, { props: { offers: [cheapest, runnerUp] } })
+
+    expect(wrapper.text()).toContain('最低价地区：上海市')
+    expect(wrapper.text()).not.toContain('广东省深圳市')
   })
 })

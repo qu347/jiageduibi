@@ -49,7 +49,7 @@ def ingest_candidates(db: Session, search_id: int, payload: PlatformOfferBatch) 
             decision = evaluate_subsidy(
                 rules,
                 SubsidyContext(
-                    region_code=search.region_code,
+                    region_code=raw.region_code or search.region_code,
                     category="手机",
                     platform=raw.platform,
                     shop_type=raw.shop_type,
@@ -207,7 +207,8 @@ def evaluated(
         price_type=raw.price_type,
         stock_status=raw.stock_status,
         subsidy_status=subsidy_status,
-        region_code=search.region_code,
+        region_code=raw.region_code or search.region_code,
+        region_name=raw.region_name,
         match=match,
         price=price,
         source_type=batch.source_type,

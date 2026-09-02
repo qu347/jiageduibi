@@ -258,6 +258,7 @@ def apply_current_offer_values(
     offer.excluded_reason = value.match.excluded_reason
     offer.subsidy_status = value.subsidy_status
     offer.region_code = value.region_code or search.region_code
+    offer.region_name = value.region_name
     offer.match_confidence = value.match.score
     offer.source_type = value.source_type
     offer.adapter_version = value.adapter_version
@@ -284,6 +285,8 @@ def offer_view(value: Offer, platform_code: str, shop: Shop) -> OfferView:
         estimated_final_price_cents=value.estimated_final_price_cents,
         conditional_price_cents=value.conditional_price_cents,
         subsidy_status=value.subsidy_status,
+        region_code=value.region_code,
+        region_name=value.region_name,
         match_confidence=value.match_confidence,
         excluded_reason=value.excluded_reason,
         captured_at=value.captured_at,

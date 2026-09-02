@@ -14,6 +14,8 @@ export interface OfferView {
   estimated_final_price_cents: number | null
   conditional_price_cents: number | null
   subsidy_status: SubsidyStatus
+  region_code: string | null
+  region_name: string | null
   match_confidence: number
   excluded_reason: string | null
   captured_at: string

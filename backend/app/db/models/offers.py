@@ -101,6 +101,7 @@ class Offer(Base):
     excluded_reason: Mapped[str | None] = mapped_column(String(80))
     subsidy_status: Mapped[str] = mapped_column(String(24), default="unknown")
     region_code: Mapped[str | None] = mapped_column(String(12))
+    region_name: Mapped[str | None] = mapped_column(String(120))
     match_confidence: Mapped[int] = mapped_column(Integer)
     source_type: Mapped[str] = mapped_column(String(32))
     adapter_version: Mapped[str] = mapped_column(String(80))

@@ -13,6 +13,8 @@
       "shop_name": "京东自营",
       "shop_type": "self_operated",
       "product_url": "https://example.invalid/jd/jd-phone-1",
+      "region_code": "310100",
+      "region_name": "上海市",
       "sale_price_cents": 549900,
       "subsidy_amount_cents": 50000,
       "subsidy_status": "confirmed",

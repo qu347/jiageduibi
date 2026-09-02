@@ -48,6 +48,9 @@ function formatMoney(value: number | null): string {
           <span class="subsidy-badge" :class="offer.subsidy_status">
             {{ subsidyLabels[offer.subsidy_status] }}
           </span>
+          <span v-if="index === 0" class="region-badge" data-testid="lowest-region">
+            最低价地区：{{ offer.region_name ?? offer.region_code ?? '地区未知' }}
+          </span>
         </div>
         <p>{{ offer.title }}</p>
         <OfferDetails :offer="offer" />

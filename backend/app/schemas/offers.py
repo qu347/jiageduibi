@@ -18,6 +18,8 @@ class RawOffer(BaseModel):
     shop_type: Literal["self_operated", "official_flagship", "authorized", "third_party"] = "third_party"
     product_url: str = "https://example.invalid/unknown"
     color: str | None = None
+    region_code: str | None = Field(default=None, pattern=r"^\d{6,12}$")
+    region_name: str | None = Field(default=None, min_length=1, max_length=120)
     merchant_discount_cents: int = Field(default=0, ge=0)
     platform_coupon_cents: int = Field(default=0, ge=0)
     member_discount_cents: int = Field(default=0, ge=0)

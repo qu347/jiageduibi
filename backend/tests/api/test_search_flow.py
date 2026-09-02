@@ -62,6 +62,39 @@ def test_fixed_offers_produce_three_sorted_comparable_results(client: TestClient
     assert result["excluded_count"] == 6
 
 
+def test_nationwide_search_uses_and_returns_each_offer_region(client: TestClient) -> None:
+    variant_id = client.get("/api/catalog/search", params={"q": "苹果17"}).json()["items"][0]["variants"][0]["id"]
+    session_response = client.post(
+        "/api/search-sessions",
+        json={"variant_id": variant_id, "region_code": None, "include_conditional": False},
+    )
+    assert session_response.status_code == 201
+    assert session_response.json()["region_code"] is None
+    session_id = session_response.json()["id"]
+
+    fixtures_root = Path(__file__).parents[3] / "fixtures"
+    offer_regions = {
+        "jd": ("310100", "上海市"),
+        "taobao": ("440300", "广东省深圳市"),
+        "pdd": ("110100", "北京市"),
+    }
+    for fixture, (region_code, region_name) in offer_regions.items():
+        payload = json.loads((fixtures_root / fixture / "search-results.json").read_text(encoding="utf-8"))
+        payload["items"][0]["region_code"] = region_code
+        payload["items"][0]["region_name"] = region_name
+        response = client.post(f"/api/search-sessions/{session_id}/offers", json=payload)
+        assert response.status_code == 200
+
+    result = client.post(f"/api/search-sessions/{session_id}/finalize").json()
+
+    assert [(offer["platform"], offer["region_code"], offer["region_name"]) for offer in result["offers"]] == [
+        ("jd", "310100", "上海市"),
+        ("taobao", "440300", "广东省深圳市"),
+        ("pdd", "110100", "北京市"),
+    ]
+    assert result["offers"][2]["estimated_final_price_cents"] == 479900
+
+
 def test_invalid_search_payload_uses_structured_error(client: TestClient) -> None:
     response = client.post(
         "/api/search-sessions",

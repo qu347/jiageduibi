@@ -95,6 +95,9 @@ a { color: inherit; text-decoration: none; }
 .filters { padding: 24px; }
 .filters label { display: block; font-size: 13px; font-weight: 700; margin: 24px 0 8px; }
 .filters .hint { margin: 8px 0 0; color: var(--muted); font-size: 12px; line-height: 1.6; }
+.nationwide-scope { display: grid; gap: 4px; padding: 13px 14px; border: 1px solid #b9d9ca; border-radius: 12px; background: #f1faf5; }
+.nationwide-scope strong { color: var(--green-dark); font-size: 14px; }
+.nationwide-scope span { color: var(--muted); font-size: 11px; }
 .check-row { display: flex !important; gap: 9px; align-items: flex-start; font-weight: 500 !important; line-height: 1.5; }
 .check-row input { margin-top: 3px; accent-color: var(--green); }
 .privacy-note { margin-top: 26px; padding: 14px; border-radius: 12px; background: #f5f8f6; }
@@ -125,6 +128,7 @@ a { color: inherit; text-decoration: none; }
 .subsidy-badge { padding: 3px 7px; border-radius: 999px; background: #eef1ef; color: var(--muted); font-size: 10px; font-weight: 800; }
 .subsidy-badge.confirmed { background: #e5f6ed; color: #067647; }
 .subsidy-badge.estimated { background: #fff4df; color: #a15c00; }
+.region-badge { padding: 3px 8px; border-radius: 999px; background: #fff1e9; color: #b54708; font-size: 10px; font-weight: 800; }
 .offer-main > p { margin: 8px 0; color: #43504b; font-size: 12px; line-height: 1.5; }
 .price-block { min-width: 126px; text-align: right; }
 .price-block small, .price-block strong, .price-block span { display: block; }

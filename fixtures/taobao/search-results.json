@@ -13,6 +13,8 @@
       "shop_name": "Apple Store 官方旗舰店",
       "shop_type": "official_flagship",
       "product_url": "https://example.invalid/taobao/tb-phone-1",
+      "region_code": "440300",
+      "region_name": "广东省深圳市",
       "sale_price_cents": 504900,
       "color": "白色",
       "captured_at": "2026-09-02T01:01:00Z"

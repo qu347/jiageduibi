@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test'
 
 test('compares one exact iPhone 17 SKU across three fixture platforms', async ({ page }) => {
   await page.goto('/')
+  await expect(page.getByTestId('nationwide-scope')).toContainText('全国比价')
   await page.getByTestId('keyword').fill('苹果17')
   await page.getByTestId('search-models').click()
   await page.getByText('iPhone 17', { exact: true }).click()
@@ -13,6 +14,7 @@ test('compares one exact iPhone 17 SKU across three fixture platforms', async ({
   await page.getByTestId('run-fixture-comparison').click()
 
   await expect(page.getByTestId('offer-row')).toHaveCount(3)
+  await expect(page.getByTestId('lowest-region')).toHaveText('最低价地区：上海市')
   await expect(page.getByText(/已排除 [5-9]\d* 条干扰项/)).toBeVisible()
   await expect(page.getByText('预计国补').first()).toBeVisible()
   const prices = await page.getByTestId('comparable-price').allTextContents()
