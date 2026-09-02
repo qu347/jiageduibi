@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
-import { selectVisibleOffers } from '../stores/comparison'
+import { lowestOfferSummary, offerRegionLabel, selectVisibleOffers } from '../stores/comparison'
 import type { OfferView, SubsidyStatus } from '../types/offers'
 import OfferDetails from './OfferDetails.vue'
 
@@ -13,6 +13,11 @@ const props = withDefaults(defineProps<{
 const visibleOffers = computed(() => selectVisibleOffers(props.offers, {
   includeConditional: props.includeConditional,
 }))
+const lowest = computed(() => lowestOfferSummary(visibleOffers.value))
+
+function isLowest(offer: OfferView): boolean {
+  return lowest.value.price !== null && offer.comparable_price_cents === lowest.value.price
+}
 
 const subsidyLabels: Record<SubsidyStatus, string> = {
   confirmed: '已确认国补',
@@ -34,13 +39,17 @@ function formatMoney(value: number | null): string {
 
 <template>
   <div class="offer-list" aria-live="polite">
+    <p v-if="lowest.price !== null" class="lowest-region-summary" data-testid="lowest-region">
+      最低价地区：{{ lowest.regions.join('、') }}
+    </p>
+    <p v-else class="no-reliable-price">暂无可靠可比价</p>
     <article
       v-for="(offer, index) in visibleOffers"
       :key="offer.id"
       class="offer-row"
       data-testid="offer-row"
     >
-      <div class="rank" :class="{ best: index === 0 }">{{ index === 0 ? '最低' : index + 1 }}</div>
+      <div class="rank" :class="{ best: isLowest(offer) }">{{ isLowest(offer) ? '最低' : index + 1 }}</div>
       <div class="offer-main">
         <div class="offer-title-line">
           <strong>{{ platformNames[offer.platform] ?? offer.platform }}</strong>
@@ -48,8 +57,8 @@ function formatMoney(value: number | null): string {
           <span class="subsidy-badge" :class="offer.subsidy_status">
             {{ subsidyLabels[offer.subsidy_status] }}
           </span>
-          <span v-if="index === 0" class="region-badge" data-testid="lowest-region">
-            最低价地区：{{ offer.region_name ?? offer.region_code ?? '地区未知' }}
+          <span class="region-badge" data-testid="offer-region">
+            适用地区：{{ offerRegionLabel(offer) }}
           </span>
         </div>
         <p>{{ offer.title }}</p>

@@ -23,6 +23,21 @@
     },
     {
       "platform": "jd",
+      "title": "Apple iPhone 17 256GB 黑色 全新国行",
+      "platform_product_id": "jd-phone-1",
+      "platform_sku_id": "jd-sku-256-black",
+      "platform_shop_id": "jd-self",
+      "shop_name": "京东自营",
+      "shop_type": "self_operated",
+      "product_url": "https://example.invalid/jd/jd-phone-1",
+      "region_code": "110100",
+      "region_name": "北京市",
+      "sale_price_cents": 519900,
+      "color": "黑色",
+      "captured_at": "2026-09-02T01:03:00Z"
+    },
+    {
+      "platform": "jd",
       "title": "iPhone 17 手机壳 透明防摔",
       "platform_product_id": "jd-case-1",
       "platform_sku_id": "jd-case-clear",

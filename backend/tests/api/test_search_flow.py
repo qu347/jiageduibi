@@ -39,7 +39,7 @@ def client(tmp_path: Path) -> TestClient:
     return value
 
 
-def test_fixed_offers_produce_three_sorted_comparable_results(client: TestClient) -> None:
+def test_fixed_offers_produce_four_sorted_comparable_results(client: TestClient) -> None:
     variant_id = client.get("/api/catalog/search", params={"q": "苹果17"}).json()["items"][0]["variants"][0]["id"]
     session_response = client.post(
         "/api/search-sessions",
@@ -62,8 +62,8 @@ def test_fixed_offers_produce_three_sorted_comparable_results(client: TestClient
     result = client.post(f"/api/search-sessions/{session_id}/finalize").json()
 
     assert [offer["id"] for offer in result["offers"]] == [offer["id"] for offer in preview["offers"]]
-    assert [offer["platform"] for offer in result["offers"]] == ["jd", "taobao", "pdd"]
-    assert [offer["comparable_price_cents"] for offer in result["offers"]] == [499900, 504900, 509900]
+    assert [offer["platform"] for offer in result["offers"]] == ["jd", "taobao", "pdd", "jd"]
+    assert [offer["comparable_price_cents"] for offer in result["offers"]] == [499900, 504900, 509900, 519900]
     assert result["offers"][2]["estimated_final_price_cents"] == 479900
     assert result["excluded_count"] == 6
 
@@ -151,8 +151,14 @@ def test_nationwide_search_uses_and_returns_each_offer_region(client: TestClient
         ("jd", "310100", "上海市"),
         ("taobao", "440300", "广东省深圳市"),
         ("pdd", "110100", "北京市"),
+        ("jd", "110100", "北京市"),
     ]
-    assert [offer["subsidy_status"] for offer in result["offers"]] == ["confirmed", "unknown", "estimated"]
+    assert [offer["subsidy_status"] for offer in result["offers"]] == [
+        "confirmed",
+        "unknown",
+        "estimated",
+        "unknown",
+    ]
     assert result["offers"][2]["estimated_final_price_cents"] == 479900
 
 

@@ -16,6 +16,7 @@
       "region_code": "110100",
       "region_name": "北京市",
       "sale_price_cents": 509900,
+      "conditional_price_cents": 399900,
       "color": "蓝色",
       "captured_at": "2026-09-02T01:02:00Z"
     },

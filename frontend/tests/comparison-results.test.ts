@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 
 import FilterPanel from '../src/components/FilterPanel.vue'
 import OfferTable from '../src/components/OfferTable.vue'
-import { selectVisibleOffers } from '../src/stores/comparison'
+import { lowestOfferSummary, selectVisibleOffers } from '../src/stores/comparison'
 import type { OfferView } from '../src/types/offers'
 
 
@@ -46,13 +46,14 @@ describe('comparison results', () => {
     expect(wrapper.text()).toContain('估算 ¥4,599.00')
   })
 
-  it('does not mix conditional price into ordinary ranking by default', () => {
-    const visible = selectVisibleOffers([
+  it('does not mix conditional price into ordinary ranking when it is shown', () => {
+    const offers = [
       offer({ id: 1, comparable_price_cents: 510000 }),
       offer({ id: 2, comparable_price_cents: 520000, conditional_price_cents: 480000 }),
-    ], { includeConditional: false })
+    ]
 
-    expect(visible.map((item) => item.id)).toEqual([1, 2])
+    expect(selectVisibleOffers(offers, { includeConditional: false }).map((item) => item.id)).toEqual([1, 2])
+    expect(selectVisibleOffers(offers, { includeConditional: true }).map((item) => item.id)).toEqual([1, 2])
   })
 
   it('shows nationwide scope instead of a city selector', () => {
@@ -64,7 +65,7 @@ describe('comparison results', () => {
     expect(wrapper.find('select').exists()).toBe(false)
   })
 
-  it('shows the applicable region on the cheapest offer only', () => {
+  it('shows every applicable region and summarizes tied cheapest regions', () => {
     const cheapest = offer({
       id: 1,
       comparable_price_cents: 499900,
@@ -73,14 +74,32 @@ describe('comparison results', () => {
     })
     const runnerUp = offer({
       id: 2,
-      comparable_price_cents: 504900,
-      region_code: '440300',
-      region_name: '广东省深圳市',
+      comparable_price_cents: 499900,
+      region_code: '110100',
+      region_name: '北京市',
     })
 
     const wrapper = mount(OfferTable, { props: { offers: [cheapest, runnerUp] } })
 
-    expect(wrapper.text()).toContain('最低价地区：上海市')
-    expect(wrapper.text()).not.toContain('广东省深圳市')
+    expect(wrapper.text()).toContain('最低价地区：上海市、北京市')
+    expect(wrapper.findAll('[data-testid="offer-region"]').map((item) => item.text())).toEqual([
+      '适用地区：上海市',
+      '适用地区：北京市',
+    ])
+    expect(wrapper.findAll('.rank.best')).toHaveLength(2)
+  })
+
+  it('labels unknown regions and does not claim a minimum without a reliable price', () => {
+    const offers = [
+      offer({ id: 1, comparable_price_cents: null }),
+      offer({ id: 2, comparable_price_cents: null, region_code: '310100' }),
+    ]
+    const wrapper = mount(OfferTable, { props: { offers } })
+
+    expect(wrapper.text()).toContain('地区未确认')
+    expect(wrapper.text()).toContain('暂无可靠可比价')
+    expect(wrapper.text()).not.toContain('最低价地区')
+    expect(wrapper.findAll('.rank.best')).toHaveLength(0)
+    expect(lowestOfferSummary(offers)).toEqual({ price: null, regions: [] })
   })
 })

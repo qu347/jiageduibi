@@ -13,14 +13,29 @@ import type {
 
 export function selectVisibleOffers(
   offers: OfferView[],
-  options: { includeConditional: boolean },
+  _options: { includeConditional: boolean },
 ): OfferView[] {
-  if (!options.includeConditional) return offers
-  return [...offers].sort((left, right) => {
-    const leftPrice = left.conditional_price_cents ?? left.comparable_price_cents ?? Number.MAX_SAFE_INTEGER
-    const rightPrice = right.conditional_price_cents ?? right.comparable_price_cents ?? Number.MAX_SAFE_INTEGER
-    return leftPrice - rightPrice || left.id - right.id
-  })
+  return offers
+}
+
+
+export function offerRegionLabel(offer: OfferView): string {
+  return offer.region_name ?? offer.region_code ?? '地区未确认'
+}
+
+
+export function lowestOfferSummary(offers: OfferView[]): { price: number | null; regions: string[] } {
+  const reliablePrices = offers
+    .map((offer) => offer.comparable_price_cents)
+    .filter((price): price is number => price !== null)
+  if (reliablePrices.length === 0) return { price: null, regions: [] }
+  const price = Math.min(...reliablePrices)
+  const regions = [...new Set(
+    offers
+      .filter((offer) => offer.comparable_price_cents === price)
+      .map(offerRegionLabel),
+  )]
+  return { price, regions }
 }
 
 

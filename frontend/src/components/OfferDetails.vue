@@ -6,6 +6,10 @@ defineProps<{ offer: OfferView }>()
 function formatMoney(value: number | null): string {
   return value === null ? '无法确认' : `¥${(value / 100).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}`
 }
+
+function regionLabel(offer: OfferView): string {
+  return offer.region_name ?? offer.region_code ?? '地区未确认'
+}
 </script>
 
 <template>
@@ -14,6 +18,7 @@ function formatMoney(value: number | null): string {
     <dl>
       <div><dt>商品标题</dt><dd>{{ offer.title }}</dd></div>
       <div><dt>店铺</dt><dd>{{ offer.shop_name }}</dd></div>
+      <div><dt>适用地区</dt><dd>{{ regionLabel(offer) }}</dd></div>
       <div><dt>确认后价格</dt><dd>{{ formatMoney(offer.confirmed_final_price_cents) }}</dd></div>
       <div><dt>匹配置信度</dt><dd>{{ offer.match_confidence }} / 100</dd></div>
       <div><dt>采集来源</dt><dd>{{ offer.source_type === 'fixture' ? '本地测试夹具' : offer.source_type }}</dd></div>
