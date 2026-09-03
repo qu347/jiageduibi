@@ -1,5 +1,6 @@
 import json
 import subprocess
+import sys
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -8,6 +9,7 @@ import pytest
 from app.automation.contracts import GatewayFailure
 from app.automation.opencli import (
     CommandResult,
+    OPENCLI_EXECUTABLE,
     OpenCliGateway,
     SubprocessCommandRunner,
 )
@@ -44,7 +46,7 @@ def test_discover_uses_argument_array_and_parses_json() -> None:
     items = gateway.discover("Apple iPhone 17 256GB", limit=30)
 
     assert runner.calls == [[
-        "opencli",
+        OPENCLI_EXECUTABLE,
         "price-compare-jd",
         "search",
         "Apple iPhone 17 256GB",
@@ -70,7 +72,7 @@ def test_verify_passes_region_names_and_parses_offer() -> None:
     )
 
     assert runner.calls[-1] == [
-        "opencli",
+        OPENCLI_EXECUTABLE,
         "price-compare-jd",
         "verify",
         "100000000001",
@@ -98,6 +100,7 @@ def test_verify_passes_region_names_and_parses_offer() -> None:
         (1, '{"error":{"code":"CAPTCHA","message":"需要验证"}}', "captcha"),
         (1, '{"error":{"code":"PAGE_CHANGED","message":"结构变化"}}', "page_changed"),
         (1, '{"error":{"code":"UNSUPPORTED_REGION","message":"地区不可选"}}', "unsupported_region"),
+        (1, '{"error":{"code":"COMMAND_EXEC","message":"NETWORK_ERROR: 地区列表加载失败"}}', "network_error"),
     ],
 )
 def test_gateway_maps_structured_failures(returncode: int, stderr: str, code: str) -> None:
@@ -132,6 +135,29 @@ def test_gateway_rejects_overlong_query_before_starting_process() -> None:
     assert runner.calls == []
 
 
+def test_diagnose_checks_only_the_installed_plugin_command_group() -> None:
+    plugin_help = json.dumps({
+        "site": "price-compare-jd",
+        "commands": [{"name": "search"}, {"name": "verify"}],
+    })
+    runner = FakeRunner(results=[
+        CommandResult(returncode=0, stdout="{}", stderr=""),
+        CommandResult(returncode=0, stdout="doctor ok", stderr=""),
+        CommandResult(returncode=0, stdout=plugin_help, stderr=""),
+    ])
+
+    environment = OpenCliGateway(runner).diagnose()
+
+    assert runner.calls[-1] == [
+        OPENCLI_EXECUTABLE,
+        "price-compare-jd",
+        "--help",
+        "-f",
+        "json",
+    ]
+    assert environment.plugin_ready is True
+
+
 def test_subprocess_runner_never_uses_a_shell(monkeypatch: pytest.MonkeyPatch) -> None:
     captured: dict[str, object] = {}
 
@@ -147,3 +173,8 @@ def test_subprocess_runner_never_uses_a_shell(monkeypatch: pytest.MonkeyPatch) -
     assert result.returncode == 0
     assert captured["args"] == ["opencli", "list", "-f", "json"]
     assert captured["shell"] is False
+
+
+def test_opencli_executable_uses_the_windows_npm_shim() -> None:
+    expected = "opencli.cmd" if sys.platform == "win32" else "opencli"
+    assert OPENCLI_EXECUTABLE == expected

@@ -1,12 +1,16 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { parseHTML } from 'linkedom'
 
-import {
+import * as jdPage from '../lib/jd-page.js'
+
+
+const {
   cents,
   normalizeSearchRows,
   normalizeVerifiedOffer,
   pageFailureCode,
-} from '../lib/jd-page.js'
+} = jdPage
 
 
 test('converts visible RMB text to integer cents', () => {
@@ -30,6 +34,7 @@ test('deduplicates search rows by sku and rejects non-total prices', () => {
     { sku: '1', title: 'duplicate', price: '5099', url: '//item.jd.com/1.html' },
     { sku: '2', title: 'iPhone 17 定金', price: '100', url: '//item.jd.com/2.html' },
     { sku: '3', title: 'iPhone 17 手机壳', price: '59', url: '' },
+    { sku: '4', title: '【准新机】Apple iPhone 17 256GB', price: '4999', url: '//item.jd.com/4.html' },
   ], 30)
 
   assert.deepEqual(rows.map((row) => row.platform_sku_id), ['1'])
@@ -39,12 +44,114 @@ test('deduplicates search rows by sku and rejects non-total prices', () => {
 })
 
 
+test('extracts product rows from the current JD React search cards', () => {
+  const { document } = parseHTML(`
+    <div class="plugin_goodsContainer">
+      <div class="plugin_goodsCardWrapper" data-sku="100209267857">
+        <div class="_goods_title_container_ab12">
+          <span title="Apple/苹果 iPhone 17 256GB 白色">Apple/苹果 iPhone 17 256GB 白色</span>
+        </div>
+        <div class="_container_cd34">
+          <span class="_price_cd34"><i>¥</i><span>5,419</span></span>
+          <span>国补领后价</span>
+          <span>¥5,919</span>
+        </div>
+        <div class="_name_ef56"><span class="_limit_ef56">Apple产品京东自营旗舰店</span></div>
+      </div>
+    </div>
+  `)
+
+  const extracted = jdPage.extractSearchRows?.(3, document) ?? []
+  const rows = normalizeSearchRows(extracted, 3)
+
+  assert.deepEqual(rows, [{
+    platform_sku_id: '100209267857',
+    title: 'Apple/苹果 iPhone 17 256GB 白色',
+    product_url: 'https://item.jd.com/100209267857.html',
+    shop_name: 'Apple产品京东自营旗舰店',
+    platform_shop_id: null,
+    shop_type: 'self_operated',
+    initial_price_cents: 541900,
+  }])
+})
+
+
+test('finds the unique current JD region opener', () => {
+  const { document } = parseHTML(`
+    <div class="shipping-address"></div>
+    <div class="billing-address"></div>
+    <div id="area-2026"></div>
+  `)
+
+  assert.equal(jdPage.regionOpenerSelector?.(document), '#area-2026')
+})
+
+
+test('matches official region names to JD short labels', () => {
+  assert.deepEqual(jdPage.regionLabelCandidates?.('北京市'), ['北京市', '北京'])
+  assert.deepEqual(jdPage.regionLabelCandidates?.('新疆维吾尔自治区'), ['新疆维吾尔自治区', '新疆'])
+  assert.deepEqual(jdPage.regionLabelCandidates?.('朝阳区'), ['朝阳区', '朝阳'])
+})
+
+
+test('detects a stalled current JD region list', () => {
+  const { document } = parseHTML('<div class="jd_area_wrap_hash"><i class="jd_loading_hash"></i></div>')
+  assert.equal(jdPage.regionListLoading?.(document), true)
+})
+
+
+test('waits for JD results through the OpenCLI page contract', async () => {
+  const calls = []
+  const page = {
+    wait(options) {
+      calls.push(options)
+      return Promise.resolve()
+    },
+  }
+
+  await jdPage.waitForSearchResults?.(page, 12)
+
+  assert.deepEqual(calls, [{
+    selector: '#J_goodsList .gl-item, .plugin_goodsCardWrapper[data-sku]',
+    timeout: 12,
+  }])
+})
+
+
 test('detects login, captcha and unsupported page states', () => {
   assert.equal(pageFailureCode('京东登录', '请登录京东'), 'AUTH_REQUIRED')
   assert.equal(pageFailureCode('安全验证', '请完成滑块验证码'), 'CAPTCHA')
   assert.equal(pageFailureCode('商品页', '页面内容暂不可用'), 'PAGE_CHANGED')
+  assert.equal(pageFailureCode('商品搜索', '抱歉由于网络异常导致无法搜索，请稍后再试'), 'NETWORK_ERROR')
   assert.equal(pageFailureCode('京东商品', 'Apple iPhone 17'), null)
   assert.equal(pageFailureCode('京东商品', '账户中心 退出登录 Apple iPhone 17'), null)
+})
+
+
+test('extracts and normalizes the current JD item offer with explicit subsidy', () => {
+  const { document } = parseHTML(`
+    <div class="top-name" title="Apple产品京东自营旗舰店"></div>
+    <span class="sku-title-name">Apple/苹果 iPhone 17 256GB 白色</span>
+    <div class="product-price-panel">
+      <span class="product-price--value">5419</span>
+      <span class="product-price--gray-line-through">¥5919</span>
+    </div>
+    <div class="floor-item">国家补贴｜领后减￥500</div>
+    <div class="logistics-delivery-time">现货，预计明日送达</div>
+    <div class="logistics-service">京东物流 59元免基础运费</div>
+  `)
+
+  const raw = jdPage.extractVerifiedOffer?.('100209267857', document)
+  const offer = normalizeVerifiedOffer(raw, '2026-09-03T03:00:00.000Z')
+
+  assert.equal(offer.title, 'Apple/苹果 iPhone 17 256GB 白色')
+  assert.equal(offer.shop_name, 'Apple产品京东自营旗舰店')
+  assert.equal(offer.sale_price_cents, 541900)
+  assert.equal(offer.listed_price_cents, 591900)
+  assert.equal(offer.subsidy_amount_cents, 50000)
+  assert.equal(offer.subsidy_status, 'confirmed')
+  assert.equal(offer.shipping_fee_cents, 0)
+  assert.equal(offer.stock_status, 'in_stock')
 })
 
 

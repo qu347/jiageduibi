@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Literal, Protocol
@@ -19,6 +20,7 @@ from app.automation.regions import RegionTarget
 
 MAX_OUTPUT_BYTES = 1024 * 1024
 DEFAULT_TIMEOUT_SECONDS = 90
+OPENCLI_EXECUTABLE = "opencli.cmd" if sys.platform == "win32" else "opencli"
 
 
 @dataclass(frozen=True, slots=True)
@@ -105,6 +107,7 @@ _TOKEN_FAILURES = {
     "AUTH_REQUIRED": ("login_required", "需要先在浏览器登录平台"),
     "PAGE_CHANGED": ("page_changed", "平台页面结构已经变化"),
     "UNSUPPORTED_REGION": ("unsupported_region", "页面无法选择该代表地区"),
+    "NETWORK_ERROR": ("network_error", "浏览器命令超时或网络异常"),
 }
 
 
@@ -125,7 +128,7 @@ class OpenCliGateway:
 
         rows = self._execute_rows(
             [
-                "opencli",
+                OPENCLI_EXECUTABLE,
                 "price-compare-jd",
                 "search",
                 normalized_query,
@@ -145,7 +148,7 @@ class OpenCliGateway:
     ) -> VerifiedOffer:
         rows = self._execute_rows(
             [
-                "opencli",
+                OPENCLI_EXECUTABLE,
                 "price-compare-jd",
                 "verify",
                 candidate.platform_sku_id,
@@ -166,8 +169,11 @@ class OpenCliGateway:
 
     def diagnose(self) -> AutomationEnvironment:
         agent_reach = self._runner.run(["agent-reach", "doctor", "--json"], 20)
-        doctor = self._runner.run(["opencli", "doctor"], 20)
-        commands = self._runner.run(["opencli", "list", "-f", "json"], 20)
+        doctor = self._runner.run([OPENCLI_EXECUTABLE, "doctor"], 20)
+        commands = self._runner.run(
+            [OPENCLI_EXECUTABLE, "price-compare-jd", "--help", "-f", "json"],
+            20,
+        )
 
         agent_reach_available = agent_reach.returncode != 78
         opencli_available = doctor.returncode != 78
@@ -228,17 +234,14 @@ class OpenCliGateway:
         except json.JSONDecodeError:
             return False
 
-        found: set[str] = set()
-
-        def visit(value: object) -> None:
-            if isinstance(value, dict):
-                if value.get("site") == "price-compare-jd" and isinstance(value.get("name"), str):
-                    found.add(value["name"])
-                for child in value.values():
-                    visit(child)
-            elif isinstance(value, list):
-                for child in value:
-                    visit(child)
-
-        visit(payload)
+        if not isinstance(payload, dict) or payload.get("site") != "price-compare-jd":
+            return False
+        commands = payload.get("commands")
+        if not isinstance(commands, list):
+            return False
+        found = {
+            command["name"]
+            for command in commands
+            if isinstance(command, dict) and isinstance(command.get("name"), str)
+        }
         return {"search", "verify"} <= found

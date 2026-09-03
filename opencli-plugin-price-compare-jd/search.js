@@ -1,7 +1,12 @@
 import { AuthRequiredError, CommandExecutionError, EmptyResultError } from '@jackwener/opencli/errors'
 import { cli, Strategy } from '@jackwener/opencli/registry'
 
-import { normalizeSearchRows, pageFailureCode } from './lib/jd-page.js'
+import {
+  extractSearchRows,
+  normalizeSearchRows,
+  pageFailureCode,
+  waitForSearchResults,
+} from './lib/jd-page.js'
 
 
 async function pageMarkers(page) {
@@ -13,8 +18,9 @@ async function pageMarkers(page) {
 
 
 function raisePageFailure(code) {
-  if (code === 'AUTH_REQUIRED') throw new AuthRequiredError('请先在 Chrome 登录京东')
+  if (code === 'AUTH_REQUIRED') throw new AuthRequiredError('jd.com', '请先在 Chrome 登录京东')
   if (code === 'CAPTCHA') throw new CommandExecutionError('CAPTCHA: 请在 Chrome 完成京东安全验证')
+  if (code === 'NETWORK_ERROR') throw new CommandExecutionError('NETWORK_ERROR: 京东搜索请求失败，请检查网络或稍后重试')
   if (code === 'PAGE_CHANGED') throw new CommandExecutionError('PAGE_CHANGED: 京东搜索页面当前不可读取')
 }
 
@@ -47,23 +53,14 @@ cli({
     let markers = await pageMarkers(page)
     raisePageFailure(pageFailureCode(markers.title, markers.bodyText))
     try {
-      await page.waitForSelector('#J_goodsList .gl-item')
+      await waitForSearchResults(page)
     } catch {
       markers = await pageMarkers(page)
       raisePageFailure(pageFailureCode(markers.title, markers.bodyText))
       throw new CommandExecutionError('PAGE_CHANGED: 京东搜索结果结构未找到')
     }
 
-    const rows = await page.evaluate((rowLimit) => Array.from(
-      document.querySelectorAll('#J_goodsList .gl-item'),
-    ).slice(0, rowLimit).map((node) => ({
-      sku: node.getAttribute('data-sku') || '',
-      title: node.querySelector('.p-name em')?.textContent || '',
-      price: node.querySelector('.p-price i')?.textContent || '',
-      url: node.querySelector('.p-name a')?.getAttribute('href') || '',
-      shop_name: node.querySelector('.p-shop a')?.textContent || '未知店铺',
-      platform_shop_id: node.querySelector('.p-shop a')?.getAttribute('data-shopid') || null,
-    })), maximum)
+    const rows = await page.evaluate(extractSearchRows, maximum)
     const normalized = normalizeSearchRows(rows, maximum)
     if (!normalized.length) throw new EmptyResultError('price-compare-jd search', '请使用更准确的商品型号')
     return normalized
