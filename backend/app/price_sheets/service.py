@@ -2,11 +2,16 @@ from __future__ import annotations
 
 from datetime import UTC, date, datetime
 
-from sqlalchemy import delete, select
+from sqlalchemy import and_, delete, select
 from sqlalchemy.orm import Session
 
 from app.automation.regions import MAINLAND_REGION_TARGETS
-from app.db.models.price_sheets import PriceSheetBatch, PriceSheetItem, PriceSheetRegionTask
+from app.db.models.price_sheets import (
+    PriceSheetBatch,
+    PriceSheetItem,
+    PriceSheetRegionResult,
+    PriceSheetRegionTask,
+)
 from app.price_sheets.contracts import ParsedPriceSheet
 from app.schemas.price_sheets import (
     PriceSheetBatchDetail,
@@ -14,6 +19,8 @@ from app.schemas.price_sheets import (
     PriceSheetItemInput,
     PriceSheetItemView,
     PriceSheetRegionTaskView,
+    PriceSheetResultsView,
+    PriceSheetResultView,
 )
 
 
@@ -199,6 +206,13 @@ def resume_batch(db: Session, batch_id: int) -> PriceSheetBatchDetail:
                 task.status = "queued"
                 task.error_code = None
                 task.error_summary = None
+        for item in db.scalars(select(PriceSheetItem).where(
+            PriceSheetItem.batch_id == batch_id,
+            PriceSheetItem.status == "waiting_user",
+        )).all():
+            item.status = "queued"
+            item.last_error_code = None
+            item.last_error_summary = None
     batch.updated_at = datetime.now(UTC)
     db.flush()
     return get_batch_detail(db, batch_id)
@@ -242,6 +256,108 @@ def retry_failed(db: Session, batch_id: int) -> PriceSheetBatchDetail:
     batch.updated_at = datetime.now(UTC)
     db.flush()
     return get_batch_detail(db, batch_id)
+
+
+def recover_interrupted_batches(db: Session) -> int:
+    batches = db.scalars(select(PriceSheetBatch).where(PriceSheetBatch.status == "running")).all()
+    now = datetime.now(UTC)
+    for batch in batches:
+        item_ids = db.scalars(select(PriceSheetItem.id).where(PriceSheetItem.batch_id == batch.id)).all()
+        for item in db.scalars(select(PriceSheetItem).where(
+            PriceSheetItem.batch_id == batch.id,
+            PriceSheetItem.status == "running",
+        )).all():
+            item.status = "queued"
+            item.started_at = None
+        if item_ids:
+            for task in db.scalars(select(PriceSheetRegionTask).where(
+                PriceSheetRegionTask.price_sheet_item_id.in_(item_ids),
+                PriceSheetRegionTask.status == "running",
+            )).all():
+                task.status = "queued"
+                task.started_at = None
+        batch.status = "queued"
+        batch.current_item_id = None
+        batch.updated_at = now
+    db.flush()
+    return len(batches)
+
+
+def get_results(db: Session, batch_id: int) -> PriceSheetResultsView:
+    _require_batch(db, batch_id)
+    items = db.scalars(select(PriceSheetItem).where(
+        PriceSheetItem.batch_id == batch_id,
+        PriceSheetItem.selected.is_(True),
+    ).order_by(PriceSheetItem.sequence)).all()
+    lower: list[PriceSheetResultView] = []
+    not_lower: list[PriceSheetResultView] = []
+    partial: list[PriceSheetResultView] = []
+    for item in items:
+        row = db.execute(
+            select(PriceSheetRegionResult, PriceSheetRegionTask)
+            .join(PriceSheetRegionTask, and_(
+                PriceSheetRegionTask.price_sheet_item_id == PriceSheetRegionResult.price_sheet_item_id,
+                PriceSheetRegionTask.region_code == PriceSheetRegionResult.region_code,
+            ))
+            .where(PriceSheetRegionResult.price_sheet_item_id == item.id)
+            .order_by(
+                PriceSheetRegionResult.trusted_price_cents,
+                PriceSheetRegionTask.sequence,
+                PriceSheetRegionResult.platform_sku_id,
+            )
+        ).first()
+        complete = item.completed_region_count == item.total_region_count == 31 and item.failed_region_count == 0
+        if not complete:
+            partial.append(_result_view(item, row, "partial"))
+        elif row is None or row[0].trusted_price_cents >= item.today_price_cents:
+            not_lower.append(_result_view(item, row, "no_comparable" if row is None else "not_lower"))
+        else:
+            lower.append(_result_view(item, row, "lower"))
+    return PriceSheetResultsView(
+        lower_results=lower,
+        not_lower_items=not_lower,
+        partial_items=partial,
+    )
+
+
+def _result_view(item: PriceSheetItem, row, status: str) -> PriceSheetResultView:
+    base = {
+        "item_id": item.id,
+        "model_name": item.model_name,
+        "storage": item.storage,
+        "color": item.color,
+        "today_price_cents": item.today_price_cents,
+        "status": status,
+        "coverage": f"{item.completed_region_count}/{item.total_region_count or 31}",
+    }
+    if row is None:
+        return PriceSheetResultView(**base)
+    result, task = row
+    return PriceSheetResultView(
+        **base,
+        region_code=result.region_code,
+        address=_task_address(task),
+        platform_sku_id=result.platform_sku_id,
+        title=result.title,
+        product_url=result.product_url,
+        shop_name=result.shop_name,
+        sale_price_cents=result.sale_price_cents,
+        platform_coupon_cents=result.platform_coupon_cents + result.merchant_discount_cents,
+        subsidy_amount_cents=result.subsidy_amount_cents,
+        shipping_fee_cents=result.shipping_fee_cents,
+        trusted_price_cents=result.trusted_price_cents,
+        sale_price_includes_coupon=result.sale_price_includes_coupon,
+        sale_price_includes_subsidy=result.sale_price_includes_subsidy,
+        captured_at=result.captured_at,
+    )
+
+
+def _task_address(task: PriceSheetRegionTask) -> str:
+    parts: list[str] = []
+    for part in (task.province, task.city, task.district, task.street):
+        if not parts or part != parts[-1]:
+            parts.append(part)
+    return " / ".join(parts)
 
 
 def _require_batch(db: Session, batch_id: int) -> PriceSheetBatch:

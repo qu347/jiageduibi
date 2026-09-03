@@ -19,6 +19,18 @@ class FixedOcrEngine:
         ]
 
 
+class FakePriceSheetCoordinator:
+    def __init__(self) -> None:
+        self.submitted: list[int] = []
+
+    def submit(self, batch_id: int) -> bool:
+        self.submitted.append(batch_id)
+        return True
+
+    def close(self) -> None:
+        pass
+
+
 def png_bytes() -> bytes:
     buffer = BytesIO()
     Image.new('RGB', (10, 10), color='white').save(buffer, format='PNG')
@@ -30,7 +42,14 @@ def client_for(tmp_path: Path) -> TestClient:
     config = Config(Path(__file__).parents[2] / 'alembic.ini')
     config.set_main_option('sqlalchemy.url', url)
     command.upgrade(config, 'head')
-    return TestClient(create_app(database_url=url, ocr_engine_factory=FixedOcrEngine))
+    coordinator = FakePriceSheetCoordinator()
+    app = create_app(
+        database_url=url,
+        ocr_engine_factory=FixedOcrEngine,
+        price_sheet_coordinator_factory=lambda _executor: coordinator,
+    )
+    app.state.test_price_sheet_coordinator = coordinator
+    return TestClient(app)
 
 
 def test_recognize_edit_and_start_batch_without_persisting_image(tmp_path: Path) -> None:
@@ -64,6 +83,7 @@ def test_recognize_edit_and_start_batch_without_persisting_image(tmp_path: Path)
     assert started.json()['batch']['selected_count'] == 2
     assert len(started.json()['tasks']) == 62
     assert started.json()['tasks'][0]['street'] == '奥运村街道'
+    assert client.app.state.test_price_sheet_coordinator.submitted == [batch_id]
 
 
 def test_review_validation_returns_structured_422(tmp_path: Path) -> None:

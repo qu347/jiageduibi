@@ -18,6 +18,7 @@ from app.price_sheets.parser import parse_price_sheet
 from app.price_sheets.service import (
     create_batch,
     get_batch_detail,
+    get_results,
     replace_items,
     request_pause,
     request_stop,
@@ -25,7 +26,7 @@ from app.price_sheets.service import (
     retry_failed,
     start_batch,
 )
-from app.schemas.price_sheets import PriceSheetBatchDetail, PriceSheetItemsUpdate
+from app.schemas.price_sheets import PriceSheetBatchDetail, PriceSheetItemsUpdate, PriceSheetResultsView
 
 
 router = APIRouter(prefix="/api/price-sheet-batches", tags=["price-sheets"])
@@ -71,6 +72,17 @@ async def recognize_price_sheet(
 @router.get("/{batch_id}", response_model=PriceSheetBatchDetail)
 def get_price_sheet_batch(batch_id: int, db: Session = Depends(get_db)) -> PriceSheetBatchDetail:
     return _call(db, lambda: get_batch_detail(db, batch_id), "读取价目表批次失败")
+
+
+@router.get("/{batch_id}/results", response_model=PriceSheetResultsView)
+def get_price_sheet_results(batch_id: int, db: Session = Depends(get_db)) -> PriceSheetResultsView:
+    try:
+        return get_results(db, batch_id)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail=api_error("读取价目表结果失败", str(exc), next_action="检查批次编号后重试"),
+        ) from exc
 
 
 @router.put("/{batch_id}/items", response_model=PriceSheetBatchDetail)

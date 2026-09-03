@@ -1,6 +1,7 @@
 from pathlib import Path
 from collections.abc import Callable
 from datetime import UTC, datetime
+import os
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
@@ -26,7 +27,11 @@ from app.automation.opencli import OpenCliGateway, SubprocessCommandRunner
 from app.automation.run_service import recover_interrupted_runs
 from app.db.session import build_engine, session_factory
 from app.db.models.automation import CollectionRun
+from app.db.models.price_sheets import PriceSheetBatch
+from app.price_sheets.coordinator import PriceSheetCoordinator
+from app.price_sheets.executor import PriceSheetExecutor
 from app.price_sheets.ocr import OcrEngine, PaddleOcrEngine
+from app.price_sheets.service import recover_interrupted_batches
 
 
 APP_VERSION = "0.1.0"
@@ -46,6 +51,7 @@ def create_app(
     *,
     browser_gateway_factory: Callable[[], BrowserGateway] | None = None,
     collection_coordinator_factory: Callable[[CollectionExecutor], CollectionCoordinator] | None = None,
+    price_sheet_coordinator_factory: Callable[[PriceSheetExecutor], PriceSheetCoordinator] | None = None,
     ocr_engine_factory: Callable[[], OcrEngine] | None = None,
     clock: Callable[[], datetime] | None = None,
 ) -> FastAPI:
@@ -68,7 +74,13 @@ def create_app(
                 )
             )
             db.commit()
-    executor = CollectionExecutor(app.state.session_factory, app.state.browser_gateway_factory)
+    fixture_mode = os.environ.get("PRICE_COMPARE_AUTOMATION_FIXTURE") == "1"
+    executor = CollectionExecutor(
+        app.state.session_factory,
+        app.state.browser_gateway_factory,
+        region_delay_seconds=0.0 if fixture_mode else 8.0,
+        batch_cooldown_seconds=0.0 if fixture_mode else 60.0,
+    )
     app.state.collection_coordinator = (
         collection_coordinator_factory(executor)
         if collection_coordinator_factory is not None
@@ -77,6 +89,31 @@ def create_app(
     for queued_run_id in queued_run_ids:
         app.state.collection_coordinator.submit(queued_run_id)
     app.router.add_event_handler("shutdown", app.state.collection_coordinator.close)
+
+    queued_batch_ids: list[int] = []
+    if "price_sheet_batches" in inspect(app.state.engine).get_table_names():
+        with app.state.session_factory() as db:
+            recover_interrupted_batches(db)
+            queued_batch_ids = list(db.scalars(
+                select(PriceSheetBatch.id)
+                .where(PriceSheetBatch.status == "queued")
+                .order_by(PriceSheetBatch.id)
+            ))
+            db.commit()
+    price_sheet_executor = PriceSheetExecutor(
+        app.state.session_factory,
+        app.state.browser_gateway_factory,
+        region_delay_seconds=0.0 if fixture_mode else 8.0,
+        batch_cooldown_seconds=0.0 if fixture_mode else 60.0,
+    )
+    app.state.price_sheet_coordinator = (
+        price_sheet_coordinator_factory(price_sheet_executor)
+        if price_sheet_coordinator_factory is not None
+        else PriceSheetCoordinator(price_sheet_executor)
+    )
+    for queued_batch_id in queued_batch_ids:
+        app.state.price_sheet_coordinator.submit(queued_batch_id)
+    app.router.add_event_handler("shutdown", app.state.price_sheet_coordinator.close)
 
     @app.exception_handler(RequestValidationError)
     async def validation_error(_request: Request, exc: RequestValidationError) -> JSONResponse:
