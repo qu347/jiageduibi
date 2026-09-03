@@ -12,7 +12,10 @@ if (-not (Test-Path -LiteralPath $pythonPath)) {
     Assert-NativeSuccess 'Create Python virtual environment'
 }
 
-& $pythonPath -m pip install -e "${backendRoot}[dev]"
+& $pythonPath -m pip install paddlepaddle==3.3.0 -i https://www.paddlepaddle.org.cn/packages/stable/cpu/
+Assert-NativeSuccess 'Install PaddlePaddle CPU runtime'
+
+& $pythonPath -m pip install -e "${backendRoot}[dev,ocr]"
 Assert-NativeSuccess 'Install backend dependencies'
 
 pnpm --dir (Join-Path $projectRoot 'frontend') install --frozen-lockfile
