@@ -95,6 +95,31 @@ test('matches official region names to JD short labels', () => {
 })
 
 
+test('builds four-level paths and collapses municipality duplicates', () => {
+  assert.deepEqual(
+    jdPage.regionSelectionPath?.('广东省', '广州市', '天河区', '天河南街道'),
+    ['广东省', '广州市', '天河区', '天河南街道'],
+  )
+  assert.deepEqual(
+    jdPage.regionSelectionPath?.('北京市', '北京市', '朝阳区', '奥运村街道'),
+    ['北京市', '朝阳区', '奥运村街道'],
+  )
+})
+
+
+test('requires both district and street with no pending selector', () => {
+  const target = { district: '朝阳区', street: '奥运村街道' }
+  assert.equal(jdPage.regionSelectionConfirmed?.(target, {
+    selectedArea: '配送至 北京朝阳区奥运村街道',
+    pending: false,
+  }), true)
+  assert.equal(jdPage.regionSelectionConfirmed?.(target, {
+    selectedArea: '配送至 北京朝阳区',
+    pending: true,
+  }), false)
+})
+
+
 test('detects a stalled current JD region list', () => {
   const { document } = parseHTML('<div class="jd_area_wrap_hash"><i class="jd_loading_hash"></i></div>')
   assert.equal(jdPage.regionListLoading?.(document), true)

@@ -112,6 +112,30 @@ export function regionLabelCandidates(value) {
 }
 
 
+export function regionSelectionPath(province, city, district, street) {
+  const path = []
+  const keys = []
+  for (const part of [province, city, district, street]) {
+    const key = regionLabelCandidates(part).at(-1)
+    if (keys.at(-1) !== key) {
+      path.push(part)
+      keys.push(key)
+    }
+  }
+  return path
+}
+
+
+export function regionSelectionConfirmed({ district, street }, { selectedArea, pending }) {
+  const compact = (value) => String(value || '').replace(/\s+/g, '').trim()
+  const normalizedArea = compact(selectedArea)
+  const has = (part) => regionLabelCandidates(part).some(
+    (label) => normalizedArea.includes(compact(label)),
+  )
+  return !pending && has(district) && has(street)
+}
+
+
 export function regionListLoading(root = document) {
   return Boolean(root.querySelector('[class*="jd_area_wrap_"] [class*="loading"]'))
 }

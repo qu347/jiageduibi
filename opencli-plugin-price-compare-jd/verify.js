@@ -10,6 +10,8 @@ import {
   regionLabelCandidates,
   regionListLoading,
   regionOpenerSelector,
+  regionSelectionConfirmed,
+  regionSelectionPath,
   searchCandidatesToVerifiedOffers,
   waitForSearchResults,
 } from './lib/jd-page.js'
@@ -24,9 +26,12 @@ async function exactTextSelector(page, wantedText) {
       const rect = element.getBoundingClientRect()
       return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0
     }
-    const nodes = Array.from(document.querySelectorAll(
+    const panels = Array.from(document.querySelectorAll(
+      '#area-selector, .ui-area-content-wrap, [class*="jd_area_wrap_"]',
+    )).filter(visible)
+    const nodes = panels.flatMap((panel) => Array.from(panel.querySelectorAll(
       '[data-value], [data-id], [data-code], a, button, li, span',
-    )).filter((node) => visible(node) && wanted.has(normalize(node.textContent)))
+    ))).filter((node) => visible(node) && wanted.has(normalize(node.textContent)))
     const element = nodes[0]
     if (!element) return null
     if (element.id) return `#${CSS.escape(element.id)}`
@@ -80,7 +85,7 @@ async function waitForRegionOption(page, part) {
 }
 
 
-async function chooseRegion(page, province, city, district) {
+async function chooseRegion(page, province, city, district, street) {
   const opener = await page.evaluate(regionOpenerSelector)
   if (!opener) throw new CommandExecutionError('UNSUPPORTED_REGION: 找不到京东地区选择器')
   await page.click(opener)
@@ -102,30 +107,29 @@ async function chooseRegion(page, province, city, district) {
     }
   }
 
-  for (const part of [province, city, district]) {
+  for (const part of regionSelectionPath(province, city, district, street)) {
     const selector = await waitForRegionOption(page, part)
     await page.click(selector)
     await page.wait(0.4)
   }
 
-  const selectedArea = await page.evaluate(() => {
-    const selectors = [
-      '#area-2026',
-      '#area-selector',
-      '.ui-area-text',
-      '.delivery-address',
-      '[class*="_address-body_"]',
-      '[class*="jd_area_wrap_"] [class*="jd_tab_item_"]',
-    ]
-    let combined = ''
-    for (const selector of selectors) {
-      const text = document.querySelector(selector)?.textContent?.replace(/\s+/g, '') || ''
-      combined += text
+  await page.wait(1)
+
+  const state = await page.evaluate((openerSelector) => {
+    const visible = (element) => {
+      const style = window.getComputedStyle(element)
+      const rect = element.getBoundingClientRect()
+      return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0
     }
-    return combined
-  })
-  if (!regionLabelCandidates(district).some((label) => selectedArea.includes(label))) {
-    throw new CommandExecutionError('UNSUPPORTED_REGION: 页面未确认目标区县')
+    const panels = Array.from(document.querySelectorAll(
+      '#area-selector, .ui-area-content-wrap, [class*="jd_area_wrap_"]',
+    )).filter(visible)
+    const selectedArea = document.querySelector(openerSelector)?.textContent || ''
+    const pending = panels.some((panel) => /请选择/.test(panel.textContent || ''))
+    return { selectedArea, pending }
+  }, opener)
+  if (!regionSelectionConfirmed({ district, street }, state)) {
+    throw new CommandExecutionError('PAGE_CHANGED: 页面未确认目标区县和街道')
   }
 }
 
@@ -166,9 +170,10 @@ cli({
     { name: 'province', required: true, help: 'Province display name' },
     { name: 'city', required: true, help: 'City display name' },
     { name: 'district', required: true, help: 'District display name' },
+    { name: 'street', required: true, help: 'Street or town display name' },
   ],
   columns: VERIFIED_COLUMNS,
-  func: async (page, { sku, province, city, district }) => {
+  func: async (page, { sku, province, city, district, street }) => {
     const normalizedSku = String(sku)
     if (!/^\d{5,30}$/.test(normalizedSku)) {
       throw new CommandExecutionError('PAGE_CHANGED: 京东 SKU 格式无效')
@@ -177,7 +182,7 @@ cli({
     let markers = await pageMarkers(page)
     raisePageFailure(pageFailureCode(markers.title, markers.bodyText))
 
-    await chooseRegion(page, String(province), String(city), String(district))
+    await chooseRegion(page, String(province), String(city), String(district), String(street))
     markers = await pageMarkers(page)
     raisePageFailure(pageFailureCode(markers.title, markers.bodyText))
 
@@ -203,9 +208,10 @@ cli({
     { name: 'province', required: true, help: 'Province display name' },
     { name: 'city', required: true, help: 'City display name' },
     { name: 'district', required: true, help: 'District display name' },
+    { name: 'street', required: true, help: 'Street or town display name' },
   ],
   columns: VERIFIED_COLUMNS,
-  func: async (page, { query, skus, province, city, district }) => {
+  func: async (page, { query, skus, province, city, district, street }) => {
     const normalizedQuery = String(query).replace(/\s+/g, ' ').trim()
     const allowedSkus = [...new Set(String(skus).split(',').map((sku) => sku.trim()).filter(Boolean))]
     if (!normalizedQuery || normalizedQuery.length > 200 || !allowedSkus.length || allowedSkus.length > 50) {
@@ -226,7 +232,7 @@ cli({
       throw new CommandExecutionError('PAGE_CHANGED: 京东搜索结果结构未找到')
     }
 
-    await chooseRegion(page, String(province), String(city), String(district))
+    await chooseRegion(page, String(province), String(city), String(district), String(street))
     markers = await pageMarkers(page)
     raisePageFailure(pageFailureCode(markers.title, markers.bodyText))
     try {
