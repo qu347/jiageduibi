@@ -41,6 +41,29 @@ export async function apiPost<T>(path: string, body?: unknown): Promise<T> {
   return response.json() as Promise<T>
 }
 
+export async function apiPut<T>(path: string, body: unknown): Promise<T> {
+  const response = await fetch(path, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  if (!response.ok) throw await ApiError.fromResponse(response)
+  return response.json() as Promise<T>
+}
+
+export async function apiUpload<T>(path: string, file: File): Promise<T> {
+  const response = await fetch(path, {
+    method: 'POST',
+    headers: {
+      'Content-Type': file.type,
+      'X-File-Name': encodeURIComponent(file.name),
+    },
+    body: file,
+  })
+  if (!response.ok) throw await ApiError.fromResponse(response)
+  return response.json() as Promise<T>
+}
+
 
 export const automaticCollectionApi = {
   environment: () => apiGet<AutomationEnvironment>('/api/automation/environment'),

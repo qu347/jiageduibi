@@ -8,8 +8,10 @@ import OfferTable from '../components/OfferTable.vue'
 import ErrorNotice from '../components/ErrorNotice.vue'
 import CollectionSessionCard from '../components/CollectionSessionCard.vue'
 import AutomaticCollectionCard from '../components/AutomaticCollectionCard.vue'
+import PriceSheetComparison from '../components/PriceSheetComparison.vue'
 import { useCatalogStore } from '../stores/catalog'
 import { loadFixtureBatches, normalizeApiError, useComparisonStore } from '../stores/comparison'
+import { usePriceSheetStore } from '../stores/price-sheets'
 
 const catalog = useCatalogStore()
 const { confirmedVariant } = storeToRefs(catalog)
@@ -27,6 +29,8 @@ const {
   automaticLoading,
 } = storeToRefs(comparison)
 const includeConditional = ref(false)
+const workspaceMode = ref<'single' | 'price-sheet'>('single')
+const priceSheets = usePriceSheetStore()
 
 async function runFixtureComparison() {
   if (!confirmedVariant.value) return
@@ -61,8 +65,12 @@ async function copySessionId() {
 onMounted(() => {
   void comparison.loadAutomationEnvironment()
   void comparison.restoreCollectionSession().then(() => comparison.restoreAutomaticCollection())
+  void priceSheets.restore()
 })
-onUnmounted(() => comparison.stopAutomaticPolling())
+onUnmounted(() => {
+  comparison.stopAutomaticPolling()
+  priceSheets.stopPolling()
+})
 </script>
 
 <template>
@@ -76,6 +84,14 @@ onUnmounted(() => comparison.stopAutomaticPolling())
       <div class="status-pill"><span></span> 本地服务</div>
     </header>
 
+    <div class="workspace-tabs" role="tablist" aria-label="比价方式">
+      <button data-testid="single-product-tab" :class="{ active: workspaceMode === 'single' }" type="button" @click="workspaceMode = 'single'">单品比价</button>
+      <button data-testid="price-sheet-tab" :class="{ active: workspaceMode === 'price-sheet' }" type="button" @click="workspaceMode = 'price-sheet'">价目表批量比价</button>
+    </div>
+
+    <PriceSheetComparison v-if="workspaceMode === 'price-sheet'" />
+
+    <template v-else>
     <ModelSelector />
 
     <div class="workbench-grid">
@@ -149,5 +165,6 @@ onUnmounted(() => comparison.stopAutomaticPolling())
         <p class="fixture-disclaimer">固定夹具，不代表真实平台价格；用于离线验证完整流程。</p>
       </section>
     </div>
+    </template>
   </main>
 </template>
