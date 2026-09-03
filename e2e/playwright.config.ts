@@ -22,6 +22,7 @@ export default defineConfig({
     env: {
       PRICE_COMPARE_AUTOMATION_FIXTURE: '1',
       PRICE_COMPARE_AUTOMATION_FIXTURE_DELAY_MS: '20',
+      PRICE_COMPARE_OCR_FIXTURE: '1',
       PRICE_COMPARE_DATABASE_URL: `sqlite:///${e2eDatabasePath}`,
     },
   },

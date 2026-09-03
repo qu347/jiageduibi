@@ -21,11 +21,14 @@ class FakeGateway:
     def __init__(self) -> None:
         self.discover_calls: list[str] = []
         self.region_calls: list[str] = []
+        self.discover_failure: str | None = None
         self.fail_once: dict[str, str] = {}
         self.always_fail: dict[str, str] = {}
 
     def discover(self, query: str, limit: int) -> list[DiscoveredCandidate]:
         self.discover_calls.append(query)
+        if self.discover_failure:
+            raise GatewayFailure(self.discover_failure, '模拟搜索失败')
         return [
             self._candidate('2', 510_000),
             self._candidate('1', 500_000),
@@ -219,3 +222,19 @@ def test_complete_price_that_is_not_lower_is_reported_separately(
     assert results.lower_results == []
     assert len(results.not_lower_items) == 1
     assert results.not_lower_items[0].status == 'not_lower'
+
+
+def test_empty_search_result_completes_item_as_not_comparable(
+    database: tuple[sessionmaker[Session], Session], batch_id: int,
+) -> None:
+    factory, db = database
+    gateway = FakeGateway()
+    gateway.discover_failure = 'empty_result'
+
+    execute(factory, gateway, batch_id)
+    db.expire_all()
+
+    assert get_batch_detail(db, batch_id).batch.status == 'completed'
+    results = get_results(db, batch_id)
+    assert len(results.not_lower_items) == 1
+    assert results.not_lower_items[0].status == 'no_comparable'

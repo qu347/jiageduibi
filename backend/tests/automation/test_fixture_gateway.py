@@ -19,6 +19,17 @@ def test_fixture_gateway_is_deterministic_across_representative_regions(monkeypa
     assert gateway.diagnose().plugin_ready is True
 
 
+def test_fixture_gateway_preserves_exact_color_from_price_sheet_query(monkeypatch) -> None:
+    monkeypatch.setenv("PRICE_COMPARE_AUTOMATION_FIXTURE_DELAY_MS", "0")
+    gateway = FixtureBrowserGateway()
+
+    candidates = gateway.discover("Apple iPhone 17 256GB 黑色", 30)
+
+    assert len(candidates) == 1
+    assert candidates[0].title == "Apple iPhone 17 256GB 黑色 全新国行"
+    assert candidates[0].initial_price_cents == 519900
+
+
 def test_fixture_gateway_requires_exact_test_environment_value(monkeypatch) -> None:
     monkeypatch.delenv("JD_UNION_APP_KEY", raising=False)
     monkeypatch.delenv("JD_UNION_APP_SECRET", raising=False)

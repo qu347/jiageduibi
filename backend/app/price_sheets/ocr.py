@@ -34,6 +34,18 @@ class OcrEngine(Protocol):
     def recognize(self, image_path: Path) -> list[OcrLine]: ...
 
 
+class FixtureOcrEngine:
+    """Deterministic OCR used only by the explicit offline test environment."""
+
+    def recognize(self, image_path: Path) -> list[OcrLine]:
+        del image_path
+        return [
+            OcrLine("9.3收货行情", 0.99, ((0, 0), (100, 0), (100, 20), (0, 20))),
+            OcrLine("17-256G 黑5900", 0.99, ((0, 30), (200, 30), (200, 50), (0, 50))),
+            OcrLine("17-256G 白5000", 0.99, ((0, 60), (200, 60), (200, 80), (0, 80))),
+        ]
+
+
 def _validate_image(data: bytes, content_type: str) -> str:
     expected = _CONTENT_TYPES.get(content_type.lower())
     if expected is None:

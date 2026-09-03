@@ -1,6 +1,7 @@
 from concurrent.futures import ThreadPoolExecutor
 from threading import Lock
 
+from app.automation.browser_slot import BROWSER_AUTOMATION_LOCK
 from app.automation.executor import CollectionExecutor
 
 
@@ -34,7 +35,8 @@ class CollectionCoordinator:
 
     def _execute_and_release(self, run_id: int) -> None:
         try:
-            self._executor.execute(run_id)
+            with BROWSER_AUTOMATION_LOCK:
+                self._executor.execute(run_id)
         finally:
             with self._lock:
                 self._submitted.discard(run_id)

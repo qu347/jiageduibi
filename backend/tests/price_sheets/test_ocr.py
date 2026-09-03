@@ -7,7 +7,8 @@ import pytest
 from PIL import Image
 
 from app.price_sheets.contracts import OcrLine
-from app.price_sheets.ocr import ImageValidationError, recognize_image
+from app.main import _default_ocr_engine_factory
+from app.price_sheets.ocr import FixtureOcrEngine, ImageValidationError, PaddleOcrEngine, recognize_image
 
 
 class RecordingEngine:
@@ -65,3 +66,21 @@ def test_temporary_file_is_deleted_when_engine_fails() -> None:
 
     assert engine.received_path is not None
     assert not engine.received_path.exists()
+
+
+def test_fixture_ocr_returns_two_color_specific_rows() -> None:
+    rows = FixtureOcrEngine().recognize(Path('ignored.png'))
+
+    assert [row.text for row in rows] == [
+        '9.3收货行情',
+        '17-256G 黑5900',
+        '17-256G 白5000',
+    ]
+
+
+def test_default_ocr_uses_fixture_only_for_exact_test_environment_value(monkeypatch) -> None:
+    monkeypatch.setenv('PRICE_COMPARE_OCR_FIXTURE', 'true')
+    assert isinstance(_default_ocr_engine_factory(), PaddleOcrEngine)
+
+    monkeypatch.setenv('PRICE_COMPARE_OCR_FIXTURE', '1')
+    assert isinstance(_default_ocr_engine_factory(), FixtureOcrEngine)

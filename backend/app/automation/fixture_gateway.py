@@ -1,6 +1,7 @@
 import json
 import os
 import time
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -38,6 +39,16 @@ class FixtureBrowserGateway:
     def discover(self, query: str, limit: int) -> list[DiscoveredCandidate]:
         if not query.strip():
             raise ValueError("查询内容不能为空")
+        color = next(
+            (value for value in ("黑色", "白色", "紫色", "蓝色", "绿色", "橙色", "金色") if value in query),
+            None,
+        )
+        if color:
+            return [replace(
+                self._candidates[0],
+                title=f"{query.strip()} 全新国行",
+                initial_price_cents=519900,
+            )][:limit]
         return self._candidates[:limit]
 
     def verify(

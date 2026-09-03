@@ -2,7 +2,7 @@
 
 ## Backend
 
-在 `backend` 目录运行 `.\.venv\Scripts\python.exe -m pytest -v`。测试覆盖多地区迁移与安全降级、31 地区目录、自动任务恢复、顺序执行、验证码暂停、网络重试、Top10 保留、目录、匹配、价格、补贴、历史、状态与扩展鉴权。
+在 `backend` 目录运行 `.\.venv\Scripts\python.exe -m pytest -v`。测试覆盖多地区迁移与安全降级、31 个代表街道、自动任务恢复、跨模式浏览器串行、验证码暂停、网络重试、价目表 OCR/解析/精确颜色匹配/可信价格、Top10 保留、目录、补贴、历史、状态与扩展鉴权。
 
 ## Frontend
 
@@ -18,8 +18,8 @@
 
 ## Offline E2E
 
-`pnpm --dir e2e test` 使用本机 Edge，自动启动 FastAPI，并仅为该测试进程设置 `PRICE_COMPARE_AUTOMATION_FIXTURE=1` 和独立的系统临时 SQLite。测试从“苹果17”确认精确 SKU，启动 31 地区京东任务，验证暂停、恢复、31/31 完成、每地区 Top5 和刷新恢复；原有手动会话与四条多地区夹具流程继续独立回归。
+`pnpm --dir e2e test` 使用本机 Edge，自动启动 FastAPI，并仅为该测试进程设置 `PRICE_COMPARE_AUTOMATION_FIXTURE=1`、`PRICE_COMPARE_OCR_FIXTURE=1` 和独立的系统临时 SQLite。测试从“苹果17”确认精确 SKU，启动 31 地区京东任务并验证暂停/恢复；另一路上传合法图片，核对黑白两种颜色，完成 62 个地区任务，只显示一条低于今日价的结果并验证刷新恢复。原有手动会话与四条多地区夹具流程继续独立回归。
 
 ## Manual Live Acceptance
 
-真实平台验收尚未完成。先运行 `.\scripts\setup-automation.ps1`，再对北京朝阳、上海浦东、广东广州天河做三地区冒烟。验收必须记录日期、平台 URL、登录/验证码状态、页面显示地区、解析结果、结算页价格差异和适配器版本，且不得把手工成功推断为长期稳定。
+真实平台验收尚未完成。先运行 `.\scripts\setup-automation.ps1`，保持 Chrome 与京东登录态，在代理关闭的网络环境下先对北京朝阳奥运村、上海浦东陆家嘴、广东广州石牌三个代表街道做冒烟。验收必须记录日期、平台 URL、登录/验证码状态、页面显示到街道的地址、解析结果、结算页价格差异和适配器版本，且不得把手工成功推断为长期稳定。

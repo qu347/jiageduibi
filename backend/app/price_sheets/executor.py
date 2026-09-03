@@ -122,7 +122,12 @@ class PriceSheetExecutor:
         if stored_json:
             candidates = [_candidate_from_json(row) for row in json.loads(stored_json)]
         else:
-            discovered = self._call_with_retry(lambda: gateway.discover(target.query, 30))
+            try:
+                discovered = self._call_with_retry(lambda: gateway.discover(target.query, 30))
+            except GatewayFailure as exc:
+                if exc.code != "empty_result":
+                    raise
+                discovered = []
             candidates = select_price_sheet_candidates(target, discovered, limit=15)
             with self._sessions() as db:
                 item = _require_item(db, item_id)

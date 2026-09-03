@@ -1,6 +1,7 @@
 from concurrent.futures import ThreadPoolExecutor
 from threading import Lock
 
+from app.automation.browser_slot import BROWSER_AUTOMATION_LOCK
 from app.price_sheets.executor import PriceSheetExecutor
 
 
@@ -34,7 +35,8 @@ class PriceSheetCoordinator:
 
     def _execute_and_release(self, batch_id: int) -> None:
         try:
-            self._executor.execute(batch_id)
+            with BROWSER_AUTOMATION_LOCK:
+                self._executor.execute(batch_id)
         finally:
             with self._lock:
                 self._submitted.discard(batch_id)

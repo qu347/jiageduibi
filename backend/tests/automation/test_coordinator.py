@@ -1,6 +1,7 @@
 import threading
 
 from app.automation.coordinator import CollectionCoordinator
+from app.price_sheets.coordinator import PriceSheetCoordinator
 
 
 class BlockingExecutor:
@@ -59,3 +60,24 @@ def test_coordinator_releases_run_id_after_execution() -> None:
             raise AssertionError("已完成的采集任务编号没有释放")
     finally:
         coordinator.close()
+
+
+def test_collection_types_share_one_browser_execution_slot() -> None:
+    first = BlockingExecutor()
+    second = BlockingExecutor()
+    collection = CollectionCoordinator(first)
+    price_sheet = PriceSheetCoordinator(second)
+    try:
+        assert collection.submit(1) is True
+        assert first.started.wait(timeout=2)
+        assert price_sheet.submit(2) is True
+        assert second.started.wait(timeout=0.1) is False
+
+        first.release.set()
+        assert second.started.wait(timeout=2)
+        second.release.set()
+    finally:
+        first.release.set()
+        second.release.set()
+        collection.close()
+        price_sheet.close()

@@ -30,7 +30,7 @@ from app.db.models.automation import CollectionRun
 from app.db.models.price_sheets import PriceSheetBatch
 from app.price_sheets.coordinator import PriceSheetCoordinator
 from app.price_sheets.executor import PriceSheetExecutor
-from app.price_sheets.ocr import OcrEngine, PaddleOcrEngine
+from app.price_sheets.ocr import FixtureOcrEngine, OcrEngine, PaddleOcrEngine
 from app.price_sheets.service import recover_interrupted_batches
 
 
@@ -60,7 +60,7 @@ def create_app(
     app.state.engine = build_engine(configured_database_url)
     app.state.session_factory = session_factory(app.state.engine)
     app.state.browser_gateway_factory = browser_gateway_factory or _default_browser_gateway_factory
-    app.state.ocr_engine_factory = ocr_engine_factory or PaddleOcrEngine
+    app.state.ocr_engine_factory = ocr_engine_factory or _default_ocr_engine_factory
     app.state.clock = clock or (lambda: datetime.now(UTC))
     queued_run_ids: list[int] = []
     if "collection_runs" in inspect(app.state.engine).get_table_names():
@@ -173,6 +173,12 @@ def _default_browser_gateway_factory() -> BrowserGateway:
     if app_key and app_secret:
         return OfficialFirstJdGateway(JdUnionClient(app_key, app_secret), browser)
     return browser
+
+
+def _default_ocr_engine_factory() -> OcrEngine:
+    if os.environ.get("PRICE_COMPARE_OCR_FIXTURE") == "1":
+        return FixtureOcrEngine()
+    return PaddleOcrEngine()
 
 
 app = create_app()
