@@ -10,7 +10,7 @@
 - Microsoft Edge（用于 Playwright 和手动采集扩展）
 - Chrome（真实自动采集时连接 OpenCLI 官方 Browser Bridge）
 
-不需要电商开放平台 API Key。离线测试不需要平台账号；真实自动采集使用你自己控制的 Chrome 京东登录态，软件不读取或保存密码、Cookie。
+离线测试不需要电商开放平台 API Key 或平台账号。真实自动采集使用你自己控制的 Chrome 京东登录态，软件不读取或保存密码、Cookie。京东联盟 AppKey/AppSecret 是可选配置：配置后优先用官方接口批量找候选，再由浏览器核验地区价格；未配置或关键词接口权限待开通时，候选搜索继续使用浏览器。
 
 ## Bootstrap
 
@@ -56,6 +56,19 @@
 Agent-Reach只负责安装和诊断 OpenCLI；软件运行时直接调用 OpenCLI。脚本注册项目自带的只读 `price-compare-jd` 插件，并检查官方 Browser Bridge。首次使用需由你在 Chrome 安装官方扩展并登录京东；程序不会加入购物车、下单或修改账号收货地址。
 
 真实 31 地区按钮在完成北京、上海、广东三地区人工冒烟验收前只能视为“尚未现场验证”。如果京东页面改版，任务会安全暂停或标记失败；当前版本保留传统爬虫为未实现的后备方向，不会自动切换。
+
+### Optional JD Union API
+
+京东联盟凭据只从当前进程环境变量读取，不写入代码、数据库或日志。启动项目前可在同一个 PowerShell 窗口临时设置：
+
+```powershell
+$env:JD_UNION_APP_KEY = Read-Host "JD Union AppKey"
+$secret = Read-Host "JD Union AppSecret" -AsSecureString
+$env:JD_UNION_APP_SECRET = [Net.NetworkCredential]::new("", $secret).Password
+.\scripts\demo.ps1
+```
+
+当前接入 `jd.union.open.goods.query` 作为关键词候选源，`jd.union.open.goods.rank.query` 只用于接口连通性与响应兼容验证，不会拿热销榜冒充关键词搜索结果。关键词接口返回“无访问权限”时自动回退 OpenCLI 搜索，地区售价、库存和补贴仍由浏览器逐地区核验。
 
 ## Load the Edge Extension
 

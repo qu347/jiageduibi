@@ -1,4 +1,5 @@
 from app.automation.fixture_gateway import FixtureBrowserGateway
+from app.automation.jd_union import OfficialFirstJdGateway
 from app.automation.opencli import OpenCliGateway
 from app.automation.regions import get_region_target
 from app.main import _default_browser_gateway_factory
@@ -19,9 +20,21 @@ def test_fixture_gateway_is_deterministic_across_representative_regions(monkeypa
 
 
 def test_fixture_gateway_requires_exact_test_environment_value(monkeypatch) -> None:
+    monkeypatch.delenv("JD_UNION_APP_KEY", raising=False)
+    monkeypatch.delenv("JD_UNION_APP_SECRET", raising=False)
     monkeypatch.setenv("PRICE_COMPARE_AUTOMATION_FIXTURE", "true")
     assert isinstance(_default_browser_gateway_factory(), OpenCliGateway)
 
     monkeypatch.setenv("PRICE_COMPARE_AUTOMATION_FIXTURE", "1")
     monkeypatch.setenv("PRICE_COMPARE_AUTOMATION_FIXTURE_DELAY_MS", "0")
     assert isinstance(_default_browser_gateway_factory(), FixtureBrowserGateway)
+
+
+def test_default_gateway_enables_official_first_only_with_both_credentials(monkeypatch) -> None:
+    monkeypatch.delenv("PRICE_COMPARE_AUTOMATION_FIXTURE", raising=False)
+    monkeypatch.setenv("JD_UNION_APP_KEY", "test-app")
+    monkeypatch.delenv("JD_UNION_APP_SECRET", raising=False)
+    assert isinstance(_default_browser_gateway_factory(), OpenCliGateway)
+
+    monkeypatch.setenv("JD_UNION_APP_SECRET", "test-secret")
+    assert isinstance(_default_browser_gateway_factory(), OfficialFirstJdGateway)

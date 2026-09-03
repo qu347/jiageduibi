@@ -20,6 +20,7 @@ from app.automation.contracts import BrowserGateway
 from app.automation.coordinator import CollectionCoordinator
 from app.automation.executor import CollectionExecutor
 from app.automation.fixture_gateway import FixtureBrowserGateway
+from app.automation.jd_union import JdUnionClient, OfficialFirstJdGateway
 from app.automation.opencli import OpenCliGateway, SubprocessCommandRunner
 from app.automation.run_service import recover_interrupted_runs
 from app.db.session import build_engine, session_factory
@@ -122,7 +123,12 @@ def create_app(
 def _default_browser_gateway_factory() -> BrowserGateway:
     if os.environ.get("PRICE_COMPARE_AUTOMATION_FIXTURE") == "1":
         return FixtureBrowserGateway()
-    return OpenCliGateway(SubprocessCommandRunner())
+    browser = OpenCliGateway(SubprocessCommandRunner())
+    app_key = os.environ.get("JD_UNION_APP_KEY", "").strip()
+    app_secret = os.environ.get("JD_UNION_APP_SECRET", "").strip()
+    if app_key and app_secret:
+        return OfficialFirstJdGateway(JdUnionClient(app_key, app_secret), browser)
+    return browser
 
 
 app = create_app()
