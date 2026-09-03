@@ -12,6 +12,7 @@ from app.automation.jd_union import (
     OfficialFirstJdGateway,
     sign_params,
 )
+from app.automation.regions import get_region_target
 
 
 FIXED_NOW = datetime(2026, 9, 3, 12, 34, 56)
@@ -147,6 +148,25 @@ def test_permission_pending_falls_back_to_browser_discovery() -> None:
     assert fallback.discover_calls == [("iPhone 17", 5)]
 
 
+def test_official_first_gateway_delegates_region_batch_to_browser() -> None:
+    official = JdUnionClient(
+        "test-app",
+        "test-secret",
+        http_client=_http_client({}),
+        now=lambda: FIXED_NOW,
+    )
+    browser = _FallbackGateway()
+    gateway = OfficialFirstJdGateway(official, browser)
+    region = get_region_target("110100")
+
+    offers = gateway.verify_region("iPhone 17", browser.candidates, region)
+
+    assert offers == []
+    assert browser.verify_region_calls == [
+        ("iPhone 17", browser.candidates, region),
+    ]
+
+
 def test_goods_query_reports_permission_pending_without_credentials_or_raw_response() -> None:
     method = "jd.union.open.goods.query"
     payload = _response(method, {
@@ -204,6 +224,7 @@ class _FallbackGateway:
             initial_price_cents=529900,
         )]
         self.discover_calls: list[tuple[str, int]] = []
+        self.verify_region_calls: list[tuple[str, list[DiscoveredCandidate], object]] = []
 
     def discover(self, query: str, limit: int) -> list[DiscoveredCandidate]:
         self.discover_calls.append((query, limit))
@@ -214,3 +235,7 @@ class _FallbackGateway:
 
     def verify(self, candidate, region):
         raise AssertionError("discover fallback must not verify")
+
+    def verify_region(self, query, candidates, region):
+        self.verify_region_calls.append((query, candidates, region))
+        return []

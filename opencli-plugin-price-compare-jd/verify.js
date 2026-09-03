@@ -1,13 +1,17 @@
-import { AuthRequiredError, CommandExecutionError } from '@jackwener/opencli/errors'
+import { AuthRequiredError, CommandExecutionError, EmptyResultError } from '@jackwener/opencli/errors'
 import { cli, Strategy } from '@jackwener/opencli/registry'
 
 import {
   extractVerifiedOffer,
+  extractSearchRows,
+  normalizeSearchRows,
   normalizeVerifiedOffer,
   pageFailureCode,
   regionLabelCandidates,
   regionListLoading,
   regionOpenerSelector,
+  searchCandidatesToVerifiedOffers,
+  waitForSearchResults,
 } from './lib/jd-page.js'
 
 
@@ -57,6 +61,7 @@ function raisePageFailure(code) {
   if (code === 'AUTH_REQUIRED') throw new AuthRequiredError('jd.com', '请先在 Chrome 登录京东')
   if (code === 'CAPTCHA') throw new CommandExecutionError('CAPTCHA: 请在 Chrome 完成京东安全验证')
   if (code === 'NETWORK_ERROR') throw new CommandExecutionError('NETWORK_ERROR: 京东商品请求失败，请检查网络或稍后重试')
+  if (code === 'RATE_LIMITED') throw new CommandExecutionError('RATE_LIMITED: 京东访问频繁，请稍后恢复采集')
   if (code === 'PAGE_CHANGED') throw new CommandExecutionError('PAGE_CHANGED: 京东商品页当前不可读取')
 }
 
@@ -109,6 +114,7 @@ async function chooseRegion(page, province, city, district) {
       '#area-selector',
       '.ui-area-text',
       '.delivery-address',
+      '[class*="_address-body_"]',
       '[class*="jd_area_wrap_"] [class*="jd_tab_item_"]',
     ]
     let combined = ''
@@ -122,6 +128,29 @@ async function chooseRegion(page, province, city, district) {
     throw new CommandExecutionError('UNSUPPORTED_REGION: 页面未确认目标区县')
   }
 }
+
+
+const VERIFIED_COLUMNS = [
+  'platform_sku_id',
+  'title',
+  'product_url',
+  'shop_name',
+  'platform_shop_id',
+  'shop_type',
+  'listed_price_cents',
+  'sale_price_cents',
+  'merchant_discount_cents',
+  'platform_coupon_cents',
+  'member_discount_cents',
+  'payment_discount_cents',
+  'subsidy_amount_cents',
+  'subsidy_status',
+  'shipping_fee_cents',
+  'installation_fee_cents',
+  'conditional_price_cents',
+  'stock_status',
+  'captured_at',
+]
 
 
 cli({
@@ -138,27 +167,7 @@ cli({
     { name: 'city', required: true, help: 'City display name' },
     { name: 'district', required: true, help: 'District display name' },
   ],
-  columns: [
-    'platform_sku_id',
-    'title',
-    'product_url',
-    'shop_name',
-    'platform_shop_id',
-    'shop_type',
-    'listed_price_cents',
-    'sale_price_cents',
-    'merchant_discount_cents',
-    'platform_coupon_cents',
-    'member_discount_cents',
-    'payment_discount_cents',
-    'subsidy_amount_cents',
-    'subsidy_status',
-    'shipping_fee_cents',
-    'installation_fee_cents',
-    'conditional_price_cents',
-    'stock_status',
-    'captured_at',
-  ],
+  columns: VERIFIED_COLUMNS,
   func: async (page, { sku, province, city, district }) => {
     const normalizedSku = String(sku)
     if (!/^\d{5,30}$/.test(normalizedSku)) {
@@ -176,5 +185,63 @@ cli({
     const offer = normalizeVerifiedOffer(raw)
     if (!offer) throw new CommandExecutionError('PAGE_CHANGED: 京东商品价格结构未找到')
     return [offer]
+  },
+})
+
+
+cli({
+  site: 'price-compare-jd',
+  name: 'verify-region',
+  description: 'Read allowed JD candidate prices for one representative region',
+  domain: 'search.jd.com',
+  strategy: Strategy.UI,
+  access: 'read',
+  browser: true,
+  args: [
+    { name: 'query', positional: true, required: true, help: 'Exact product model query' },
+    { name: 'skus', required: true, help: 'Comma-separated allowed JD SKUs' },
+    { name: 'province', required: true, help: 'Province display name' },
+    { name: 'city', required: true, help: 'City display name' },
+    { name: 'district', required: true, help: 'District display name' },
+  ],
+  columns: VERIFIED_COLUMNS,
+  func: async (page, { query, skus, province, city, district }) => {
+    const normalizedQuery = String(query).replace(/\s+/g, ' ').trim()
+    const allowedSkus = [...new Set(String(skus).split(',').map((sku) => sku.trim()).filter(Boolean))]
+    if (!normalizedQuery || normalizedQuery.length > 200 || !allowedSkus.length || allowedSkus.length > 50) {
+      throw new CommandExecutionError('PAGE_CHANGED: 地区批量核验参数无效')
+    }
+    if (allowedSkus.some((sku) => !/^\d{5,30}$/.test(sku))) {
+      throw new CommandExecutionError('PAGE_CHANGED: 京东 SKU 格式无效')
+    }
+
+    await page.goto(`https://search.jd.com/Search?keyword=${encodeURIComponent(normalizedQuery)}`)
+    let markers = await pageMarkers(page)
+    raisePageFailure(pageFailureCode(markers.title, markers.bodyText))
+    try {
+      await waitForSearchResults(page)
+    } catch {
+      markers = await pageMarkers(page)
+      raisePageFailure(pageFailureCode(markers.title, markers.bodyText))
+      throw new CommandExecutionError('PAGE_CHANGED: 京东搜索结果结构未找到')
+    }
+
+    await chooseRegion(page, String(province), String(city), String(district))
+    markers = await pageMarkers(page)
+    raisePageFailure(pageFailureCode(markers.title, markers.bodyText))
+    try {
+      await waitForSearchResults(page)
+    } catch {
+      markers = await pageMarkers(page)
+      raisePageFailure(pageFailureCode(markers.title, markers.bodyText))
+      throw new CommandExecutionError('PAGE_CHANGED: 京东地区搜索结果结构未找到')
+    }
+
+    const rows = normalizeSearchRows(await page.evaluate(extractSearchRows, 50), 50)
+    const offers = searchCandidatesToVerifiedOffers(rows, allowedSkus, new Date().toISOString())
+    if (!offers.length) {
+      throw new EmptyResultError('price-compare-jd verify-region', '该地区未显示候选白名单商品')
+    }
+    return offers
   },
 })

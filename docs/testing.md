@@ -14,7 +14,7 @@
 
 ## OpenCLI Plugin
 
-运行 `node --test opencli-plugin-price-compare-jd\tests\*.test.mjs`（PowerShell 总闸会解析为显式文件列表）。测试覆盖京东搜索列表解析、价格格式和登录状态判断，不访问真实网站。
+运行 `node --test opencli-plugin-price-compare-jd\tests\*.test.mjs`（PowerShell 总闸会解析为显式文件列表）。测试覆盖京东搜索列表解析、批量候选白名单报价、价格格式、登录状态、访问频繁和不可用商品页判断，不访问真实网站。
 
 ## Offline E2E
 

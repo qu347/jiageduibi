@@ -10,13 +10,13 @@
 
 ## Read-only JD OpenCLI Plugin
 
-项目自带 `price-compare-jd`，不覆盖 OpenCLI 上游内置 `jd` 命令。`search` 只读取搜索列表候选；`verify` 只选择项目固定的代表省/市/区并读取售价与库存。插件不访问购物车、订单、支付或账号地址写入接口。Agent-Reach只用于安装/诊断，FastAPI 运行时直接调用 OpenCLI 的 JSON 输出。
+项目自带 `price-compare-jd`，不覆盖 OpenCLI 上游内置 `jd` 命令。`search` 读取搜索列表候选；`verify-region` 每个代表地区只打开一次搜索页、切换一次地区，并只返回候选 SKU 白名单中仍可见的商品。旧的逐商品 `verify` 保留为兼容命令，但自动任务优先使用批量命令。搜索页没有明确展示的运费、会员价、优惠或国补字段保持未知，不作推测。插件不访问购物车、订单、支付或账号地址写入接口。Agent-Reach只用于安装/诊断，FastAPI 运行时直接调用 OpenCLI 的 JSON 输出。
 
-命令失败被映射为安全状态：网络错误有限重试；`login_required`、`captcha` 等待用户；`page_changed`、`unsupported_region` 只影响当前地区；`tool_unavailable` 停止整次任务。原始 stderr 和页面 HTML 不进入数据库或前端。
+命令失败被映射为安全状态：网络错误有限重试；`login_required`、`captcha`、`rate_limited` 暂停任务且不立即重试；`page_changed`、`unsupported_region` 只影响当前地区；`tool_unavailable` 停止整次任务。环境诊断只有在扩展与连接检查都明确成功时才报告 Browser Bridge 可用。原始 stderr 和页面 HTML 不进入数据库或前端。
 
 ## Optional JD Union Candidate Source
 
-配置 `JD_UNION_APP_KEY` 与 `JD_UNION_APP_SECRET` 后，候选发现优先调用京东联盟 `jd.union.open.goods.query`；签名按京东 MD5 规则在内存生成，凭据不进入业务数据。接口只提供候选，31 个代表地区的实际价格、库存和补贴仍交给 OpenCLI 浏览器核验。
+配置 `JD_UNION_APP_KEY` 与 `JD_UNION_APP_SECRET` 后，候选发现优先调用京东联盟 `jd.union.open.goods.query`；签名按京东 MD5 规则在内存生成，凭据不进入业务数据。接口只提供候选，31 个代表地区的搜索页可见售价与商品可见性仍交给 OpenCLI 浏览器核验。
 
 `jd.union.open.goods.rank.query` 的当前嵌套响应已纳入兼容测试，但热销榜不具备关键词语义，因此不参与用户查询结果。关键词接口业务状态为 403 时只降级本次候选发现到 OpenCLI；其他凭据、网关或响应错误保持显式失败，防止把错误配置静默伪装成成功。
 
@@ -30,7 +30,7 @@
 
 ## Structured Failures
 
-失败状态包括 `login_required`、`captcha`、`unsupported_region`、`page_changed`、`missing_price` 或 `invalid_output`。解析器不得用月供、以旧换新宣传价或缺失字段推测一次性总价。
+失败状态包括 `login_required`、`captcha`、`rate_limited`、`unsupported_region`、`page_changed`、`missing_price` 或 `invalid_output`。解析器不得用月供、以旧换新宣传价或缺失字段推测一次性总价。
 
 ## Live Validation Not Completed
 

@@ -9,7 +9,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.automation.candidates import build_search_query, select_candidates
-from app.automation.contracts import BrowserGateway, DiscoveredCandidate, GatewayFailure, VerifiedOffer
+from app.automation.contracts import (
+    BrowserGateway,
+    DiscoveredCandidate,
+    GatewayFailure,
+    RegionBatchGateway,
+    VerifiedOffer,
+)
 from app.automation.regions import RegionTarget
 from app.automation.run_service import refresh_run_counts, require_run
 from app.db.models.automation import CollectionCandidate, CollectionRegionTask
@@ -19,7 +25,7 @@ from app.services.offer_ingestion import ingest_verified_browser_offer, load_mat
 from app.services.offer_retention import retain_region_top_offers
 
 
-WAITING_CODES = {"captcha", "login_required"}
+WAITING_CODES = {"captcha", "login_required", "rate_limited"}
 RETRYABLE_CODES = {"network_error"}
 TASK_FAILURE_CODES = {"page_changed", "unsupported_region", "invalid_output", "empty_result"}
 RUN_FAILURE_CODES = {"tool_unavailable"}
@@ -44,7 +50,7 @@ class CollectionExecutor:
             return
         gateway = self._gateway_factory()
         try:
-            candidates = self._load_or_discover_candidates(run_id, gateway)
+            candidates, query = self._load_or_discover_candidates(run_id, gateway)
             if not candidates:
                 self._fail_run(run_id, "empty_result", "没有找到可比较的候选商品")
                 return
@@ -52,7 +58,7 @@ class CollectionExecutor:
             for task_id in self._queued_task_ids(run_id):
                 if not self._may_continue(run_id):
                     return
-                if not self._execute_region(run_id, task_id, candidates, gateway):
+                if not self._execute_region(run_id, task_id, query, candidates, gateway):
                     return
             self._finish_run(run_id)
         except GatewayFailure as exc:
@@ -89,22 +95,23 @@ class CollectionExecutor:
         self,
         run_id: int,
         gateway: BrowserGateway,
-    ) -> list[DiscoveredCandidate]:
+    ) -> tuple[list[DiscoveredCandidate], str]:
         with self._sessions() as db:
             run = require_run(db, run_id)
+            search = db.get(SearchSession, run.search_session_id)
+            if search is None:
+                raise ValueError("搜索会话不存在")
+            target = load_match_target(db, search.variant_id)
+            query = build_search_query(target)
             stored = db.scalars(
                 select(CollectionCandidate)
                 .where(CollectionCandidate.collection_run_id == run_id)
                 .order_by(CollectionCandidate.sequence)
             ).all()
             if stored:
-                return [_stored_candidate(row) for row in stored]
-            search = db.get(SearchSession, run.search_session_id)
-            if search is None:
-                raise ValueError("搜索会话不存在")
-            target = load_match_target(db, search.variant_id)
+                return [_stored_candidate(row) for row in stored], query
 
-        discovered = self._call_with_retry(lambda: gateway.discover(build_search_query(target), 30))
+        discovered = self._call_with_retry(lambda: gateway.discover(query, 30))
         selection = select_candidates(discovered, target, limit=15)
         with self._sessions() as db:
             run = require_run(db, run_id)
@@ -139,7 +146,7 @@ class CollectionExecutor:
                 initial_price_cents=item.initial_price_cents,
             )
             for item in selection.selected
-        ]
+        ], query
 
     def _queued_task_ids(self, run_id: int) -> list[int]:
         with self._sessions() as db:
@@ -158,6 +165,7 @@ class CollectionExecutor:
         self,
         run_id: int,
         task_id: int,
+        query: str,
         candidates: list[DiscoveredCandidate],
         gateway: BrowserGateway,
     ) -> bool:
@@ -185,26 +193,28 @@ class CollectionExecutor:
             )
             db.commit()
 
-        for candidate in candidates:
+        if isinstance(gateway, RegionBatchGateway):
             try:
-                verified = self._call_with_retry(lambda: gateway.verify(candidate, region))
+                verified_offers = self._call_with_retry(
+                    lambda: gateway.verify_region(query, candidates, region)
+                )
             except GatewayFailure as exc:
                 return self._handle_task_gateway_failure(run_id, task_id, exc)
 
-            accepted_count = 0
-            if not _is_out_of_stock(verified.stock_status):
-                with self._sessions() as db:
-                    summary = ingest_verified_browser_offer(
-                        db,
-                        self._search_session_id(db, run_id),
-                        _raw_offer(verified, region),
-                        adapter_version=gateway.adapter_version,
-                    )
-                    accepted_count = summary.accepted_count
-            self._record_verified_candidate(task_id, accepted_count)
+            for verified in verified_offers:
+                self._record_verified_offer(run_id, task_id, verified, region, gateway.adapter_version)
+                if not self._may_continue(run_id, current_task_id=task_id):
+                    return False
+        else:
+            for candidate in candidates:
+                try:
+                    verified = self._call_with_retry(lambda: gateway.verify(candidate, region))
+                except GatewayFailure as exc:
+                    return self._handle_task_gateway_failure(run_id, task_id, exc)
 
-            if not self._may_continue(run_id, current_task_id=task_id):
-                return False
+                self._record_verified_offer(run_id, task_id, verified, region, gateway.adapter_version)
+                if not self._may_continue(run_id, current_task_id=task_id):
+                    return False
 
         with self._sessions() as db:
             task = db.get(CollectionRegionTask, task_id)
@@ -225,6 +235,26 @@ class CollectionExecutor:
             refresh_run_counts(db, run_id)
             db.commit()
         return True
+
+    def _record_verified_offer(
+        self,
+        run_id: int,
+        task_id: int,
+        verified: VerifiedOffer,
+        region: RegionTarget,
+        adapter_version: str,
+    ) -> None:
+        accepted_count = 0
+        if not _is_out_of_stock(verified.stock_status):
+            with self._sessions() as db:
+                summary = ingest_verified_browser_offer(
+                    db,
+                    self._search_session_id(db, run_id),
+                    _raw_offer(verified, region),
+                    adapter_version=adapter_version,
+                )
+                accepted_count = summary.accepted_count
+        self._record_verified_candidate(task_id, accepted_count)
 
     def _record_verified_candidate(self, task_id: int, accepted_count: int) -> None:
         with self._sessions() as db:

@@ -12,7 +12,7 @@
 
 ## Login and CAPTCHA
 
-登录与验证码完全由用户在平台页面手动完成。自动任务收到 `login_required` 或 `captcha` 后暂停并保留已采集报价，不得绕过验证。
+登录与验证码完全由用户在平台页面手动完成。自动任务收到 `login_required`、`captcha` 或 `rate_limited` 后暂停并保留已采集报价，不得绕过验证或立即密集重试。
 
 ## No Automated Ordering
 

@@ -10,6 +10,7 @@ const {
   normalizeSearchRows,
   normalizeVerifiedOffer,
   pageFailureCode,
+  searchCandidatesToVerifiedOffers,
 } = jdPage
 
 
@@ -125,6 +126,68 @@ test('detects login, captcha and unsupported page states', () => {
   assert.equal(pageFailureCode('商品搜索', '抱歉由于网络异常导致无法搜索，请稍后再试'), 'NETWORK_ERROR')
   assert.equal(pageFailureCode('京东商品', 'Apple iPhone 17'), null)
   assert.equal(pageFailureCode('京东商品', '账户中心 退出登录 Apple iPhone 17'), null)
+})
+
+
+test('distinguishes JD rate limiting and unavailable item pages from missing region controls', () => {
+  assert.equal(
+    pageFailureCode('商品搜索', '抱歉由于访问频繁导致无法搜索，请稍后再试'),
+    'RATE_LIMITED',
+  )
+  assert.equal(
+    pageFailureCode('京东商品', '暂时无法展示该商品的信息，请稍后重试'),
+    'PAGE_CHANGED',
+  )
+})
+
+
+test('maps only allowed visible search candidates to region offers', () => {
+  const candidates = normalizeSearchRows([
+    {
+      sku: '1001',
+      title: 'Apple iPhone 17 256GB 全新国行',
+      price: '¥5,199.00',
+      url: '//item.jd.com/1001.html',
+      shop_name: '京东自营',
+      platform_shop_id: 'self',
+    },
+    {
+      sku: '2002',
+      title: '其他商品',
+      price: '¥99.00',
+      url: '//item.jd.com/2002.html',
+      shop_name: '其他店铺',
+      platform_shop_id: 'other',
+    },
+  ], 10)
+
+  const offers = searchCandidatesToVerifiedOffers(
+    candidates,
+    ['1001'],
+    '2026-09-03T06:30:00.000Z',
+  )
+
+  assert.deepEqual(offers, [{
+    platform_sku_id: '1001',
+    title: 'Apple iPhone 17 256GB 全新国行',
+    product_url: 'https://item.jd.com/1001.html',
+    shop_name: '京东自营',
+    platform_shop_id: 'self',
+    shop_type: 'self_operated',
+    listed_price_cents: null,
+    sale_price_cents: 519900,
+    merchant_discount_cents: 0,
+    platform_coupon_cents: 0,
+    member_discount_cents: 0,
+    payment_discount_cents: 0,
+    subsidy_amount_cents: 0,
+    subsidy_status: 'unknown',
+    shipping_fee_cents: 0,
+    installation_fee_cents: 0,
+    conditional_price_cents: null,
+    stock_status: 'in_stock',
+    captured_at: '2026-09-03T06:30:00.000Z',
+  }])
 })
 
 

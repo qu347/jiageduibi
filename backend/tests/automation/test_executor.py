@@ -110,6 +110,55 @@ class FakeGateway:
         return sum(call_region == region_code for _sku, call_region in self.verify_calls)
 
 
+class BatchGateway(FakeGateway):
+    def __init__(self) -> None:
+        super().__init__()
+        self.verify_region_calls: list[tuple[str, tuple[str, ...], str]] = []
+
+    def verify_region(
+        self,
+        query: str,
+        candidates: list[DiscoveredCandidate],
+        region: RegionTarget,
+    ) -> list[VerifiedOffer]:
+        self.verify_region_calls.append((
+            query,
+            tuple(candidate.platform_sku_id for candidate in candidates),
+            region.region_code,
+        ))
+        if region.region_code in self.always_fail_regions:
+            code = self.always_fail_regions[region.region_code]
+            raise GatewayFailure(code, f"模拟 {code}")
+        if region.region_code in self.fail_once_regions:
+            code = self.fail_once_regions.pop(region.region_code)
+            raise GatewayFailure(code, f"模拟 {code}")
+        return [self._offer(candidate) for candidate in candidates]
+
+    @staticmethod
+    def _offer(candidate: DiscoveredCandidate) -> VerifiedOffer:
+        return VerifiedOffer(
+            platform_sku_id=candidate.platform_sku_id,
+            title=candidate.title,
+            product_url=candidate.product_url,
+            shop_name=candidate.shop_name,
+            platform_shop_id=candidate.platform_shop_id,
+            shop_type=candidate.shop_type,
+            listed_price_cents=None,
+            sale_price_cents=candidate.initial_price_cents,
+            merchant_discount_cents=0,
+            platform_coupon_cents=0,
+            member_discount_cents=0,
+            payment_discount_cents=0,
+            subsidy_amount_cents=0,
+            subsidy_status="unknown",
+            shipping_fee_cents=0,
+            installation_fee_cents=0,
+            conditional_price_cents=None,
+            stock_status="in_stock",
+            captured_at=datetime.now(UTC),
+        )
+
+
 @pytest.fixture
 def database(tmp_path) -> Generator[tuple[sessionmaker[Session], Session], None, None]:
     engine = build_engine(f"sqlite:///{(tmp_path / 'executor.db').as_posix()}")
@@ -204,6 +253,47 @@ def test_executor_discovers_once_and_verifies_regions_sequentially(
     assert get_run(db, run_id).status == "completed"
     assert get_run(db, run_id).completed_region_count == 31
     assert db.scalar(select(func.count(Offer.id))) == 62
+
+
+def test_batch_gateway_verifies_each_region_with_one_search_page(
+    database: tuple[sessionmaker[Session], Session],
+    run_id: int,
+) -> None:
+    gateway = BatchGateway()
+
+    execute_with(database, gateway, run_id)
+    _factory, db = database
+    refresh(db)
+
+    assert gateway.verify_calls == []
+    assert len(gateway.verify_region_calls) == 31
+    assert gateway.verify_region_calls[0] == (
+        "Apple iPhone 17 256GB",
+        ("sku-cheapest", "sku-next"),
+        "110100",
+    )
+    assert gateway.verify_region_calls[-1][2] == "650100"
+    assert get_run(db, run_id).status == "completed"
+    assert db.scalar(select(func.count(Offer.id))) == 62
+
+
+def test_rate_limit_pauses_batch_run_without_immediate_retries(
+    database: tuple[sessionmaker[Session], Session],
+    run_id: int,
+) -> None:
+    gateway = BatchGateway()
+    gateway.always_fail_regions["310100"] = "rate_limited"
+
+    execute_with(database, gateway, run_id)
+    _factory, db = database
+    refresh(db)
+
+    attempted_regions = [call[2] for call in gateway.verify_region_calls]
+    assert attempted_regions[-1] == "310100"
+    assert attempted_regions.count("310100") == 1
+    assert get_run(db, run_id).status == "waiting_user"
+    assert get_task(db, run_id, "110100").status == "completed"
+    assert get_task(db, run_id, "310100").status == "waiting_user"
 
 
 def test_captcha_pauses_current_task_without_losing_completed_regions(

@@ -181,6 +181,17 @@ class OfficialFirstJdGateway:
     ) -> VerifiedOffer:
         return self._browser.verify(candidate, region)
 
+    def verify_region(
+        self,
+        query: str,
+        candidates: list[DiscoveredCandidate],
+        region: RegionTarget,
+    ) -> list[VerifiedOffer]:
+        verify_region = getattr(self._browser, "verify_region", None)
+        if verify_region is None:
+            return [self._browser.verify(candidate, region) for candidate in candidates]
+        return verify_region(query, candidates, region)
+
 
 def _parse_candidate(value: object) -> DiscoveredCandidate | None:
     if not isinstance(value, dict):

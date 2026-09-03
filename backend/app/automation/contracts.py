@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Literal, Protocol
+from typing import Literal, Protocol, runtime_checkable
 
 from app.automation.regions import RegionTarget
 
@@ -72,3 +72,13 @@ class BrowserGateway(Protocol):
         candidate: DiscoveredCandidate,
         region: RegionTarget,
     ) -> VerifiedOffer: ...
+
+
+@runtime_checkable
+class RegionBatchGateway(Protocol):
+    def verify_region(
+        self,
+        query: str,
+        candidates: list[DiscoveredCandidate],
+        region: RegionTarget,
+    ) -> list[VerifiedOffer]: ...

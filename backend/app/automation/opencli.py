@@ -108,6 +108,7 @@ _TOKEN_FAILURES = {
     "PAGE_CHANGED": ("page_changed", "平台页面结构已经变化"),
     "UNSUPPORTED_REGION": ("unsupported_region", "页面无法选择该代表地区"),
     "NETWORK_ERROR": ("network_error", "浏览器命令超时或网络异常"),
+    "RATE_LIMITED": ("rate_limited", "京东访问频繁，请稍后恢复任务"),
 }
 
 
@@ -134,6 +135,8 @@ class OpenCliGateway:
                 normalized_query,
                 "--limit",
                 str(limit),
+                "--site-session",
+                "persistent",
                 "-f",
                 "json",
             ],
@@ -158,6 +161,8 @@ class OpenCliGateway:
                 region.city,
                 "--district",
                 region.district,
+                "--site-session",
+                "persistent",
                 "-f",
                 "json",
             ],
@@ -166,6 +171,51 @@ class OpenCliGateway:
         if len(rows) != 1:
             raise GatewayFailure("invalid_output", "地区核验没有返回唯一商品结果")
         return VerifiedOffer(**rows[0].model_dump())
+
+    def verify_region(
+        self,
+        query: str,
+        candidates: list[DiscoveredCandidate],
+        region: RegionTarget,
+    ) -> list[VerifiedOffer]:
+        normalized_query = " ".join(query.split())
+        if not normalized_query or len(normalized_query) > 200:
+            raise ValueError("查询内容长度必须在 1 到 200 个字符之间")
+        if not candidates or len(candidates) > 50:
+            raise ValueError("地区批量候选数量必须在 1 到 50 之间")
+        allowed_skus = [candidate.platform_sku_id for candidate in candidates]
+        if len(set(allowed_skus)) != len(allowed_skus):
+            raise ValueError("地区批量候选 SKU 不能重复")
+
+        rows = self._execute_rows(
+            [
+                OPENCLI_EXECUTABLE,
+                "price-compare-jd",
+                "verify-region",
+                normalized_query,
+                "--skus",
+                ",".join(allowed_skus),
+                "--province",
+                region.province,
+                "--city",
+                region.city,
+                "--district",
+                region.district,
+                "--site-session",
+                "persistent",
+                "-f",
+                "json",
+            ],
+            VerifiedOfferOutput,
+        )
+        returned_skus = [row.platform_sku_id for row in rows]
+        if (
+            not returned_skus
+            or len(set(returned_skus)) != len(returned_skus)
+            or not set(returned_skus) <= set(allowed_skus)
+        ):
+            raise GatewayFailure("invalid_output", "地区批量核验返回了候选白名单外的商品")
+        return [VerifiedOffer(**row.model_dump()) for row in rows]
 
     def diagnose(self) -> AutomationEnvironment:
         agent_reach = self._runner.run(["agent-reach", "doctor", "--json"], 20)
@@ -177,7 +227,9 @@ class OpenCliGateway:
 
         agent_reach_available = agent_reach.returncode != 78
         opencli_available = doctor.returncode != 78
-        browser_bridge_ready = doctor.returncode == 0
+        browser_bridge_ready = (
+            doctor.returncode == 0 and self._browser_bridge_connected(doctor.stdout)
+        )
         plugin_ready = commands.returncode == 0 and self._plugin_commands_present(commands.stdout)
 
         if not agent_reach_available:
@@ -244,4 +296,11 @@ class OpenCliGateway:
             for command in commands
             if isinstance(command, dict) and isinstance(command.get("name"), str)
         }
-        return {"search", "verify"} <= found
+        return {"search", "verify", "verify-region"} <= found
+
+    @staticmethod
+    def _browser_bridge_connected(raw_output: str) -> bool:
+        return (
+            "[OK] Extension: connected" in raw_output
+            and "[OK] Connectivity: connected" in raw_output
+        )

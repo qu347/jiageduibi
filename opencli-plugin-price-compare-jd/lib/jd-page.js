@@ -185,6 +185,35 @@ export function normalizeSearchRows(rows, limit) {
 }
 
 
+export function searchCandidatesToVerifiedOffers(candidates, allowedSkus, capturedAt) {
+  if (!Array.isArray(candidates) || !Array.isArray(allowedSkus)) return []
+  const allowed = new Set(allowedSkus.map((sku) => String(sku)))
+  return candidates
+    .filter((candidate) => allowed.has(candidate.platform_sku_id))
+    .map((candidate) => ({
+      platform_sku_id: candidate.platform_sku_id,
+      title: candidate.title,
+      product_url: candidate.product_url,
+      shop_name: candidate.shop_name,
+      platform_shop_id: candidate.platform_shop_id,
+      shop_type: candidate.shop_type,
+      listed_price_cents: null,
+      sale_price_cents: candidate.initial_price_cents,
+      merchant_discount_cents: 0,
+      platform_coupon_cents: 0,
+      member_discount_cents: 0,
+      payment_discount_cents: 0,
+      subsidy_amount_cents: 0,
+      subsidy_status: 'unknown',
+      shipping_fee_cents: 0,
+      installation_fee_cents: 0,
+      conditional_price_cents: null,
+      stock_status: 'in_stock',
+      captured_at: capturedAt,
+    }))
+}
+
+
 export function pageFailureCode(title, bodyText) {
   const pageTitle = String(title ?? '')
   const sample = String(bodyText ?? '').slice(0, 20000)
@@ -192,8 +221,11 @@ export function pageFailureCode(title, bodyText) {
     return 'AUTH_REQUIRED'
   }
   if (/验证码|安全验证|滑块|拖动滑块|访问验证/.test(sample)) return 'CAPTCHA'
+  if (/访问频繁导致无法搜索|由于访问频繁|操作过于频繁/.test(sample)) return 'RATE_LIMITED'
   if (/网络异常导致无法搜索|网络异常|网络错误|加载失败/.test(sample)) return 'NETWORK_ERROR'
-  if (/页面内容暂不可用|页面不存在|访问异常|系统繁忙|商品已下架/.test(sample)) return 'PAGE_CHANGED'
+  if (/暂时无法展示该商品的信息|页面内容暂不可用|页面不存在|访问异常|系统繁忙|商品已下架/.test(sample)) {
+    return 'PAGE_CHANGED'
+  }
   return null
 }
 

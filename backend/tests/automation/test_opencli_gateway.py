@@ -52,6 +52,8 @@ def test_discover_uses_argument_array_and_parses_json() -> None:
         "Apple iPhone 17 256GB",
         "--limit",
         "30",
+        "--site-session",
+        "persistent",
         "-f",
         "json",
     ]]
@@ -82,6 +84,8 @@ def test_verify_passes_region_names_and_parses_offer() -> None:
         "北京市",
         "--district",
         "朝阳区",
+        "--site-session",
+        "persistent",
         "-f",
         "json",
     ]
@@ -101,6 +105,7 @@ def test_verify_passes_region_names_and_parses_offer() -> None:
         (1, '{"error":{"code":"PAGE_CHANGED","message":"结构变化"}}', "page_changed"),
         (1, '{"error":{"code":"UNSUPPORTED_REGION","message":"地区不可选"}}', "unsupported_region"),
         (1, '{"error":{"code":"COMMAND_EXEC","message":"NETWORK_ERROR: 地区列表加载失败"}}', "network_error"),
+        (1, '{"error":{"code":"COMMAND_EXEC","message":"RATE_LIMITED: 访问频繁"}}', "rate_limited"),
     ],
 )
 def test_gateway_maps_structured_failures(returncode: int, stderr: str, code: str) -> None:
@@ -135,14 +140,79 @@ def test_gateway_rejects_overlong_query_before_starting_process() -> None:
     assert runner.calls == []
 
 
+def test_verify_region_uses_one_batch_command_for_candidate_allowlist() -> None:
+    runner = FakeRunner(results=[
+        CommandResult(returncode=0, stdout=SEARCH_JSON, stderr=""),
+        CommandResult(returncode=0, stdout=VERIFY_JSON, stderr=""),
+    ])
+    gateway = OpenCliGateway(runner)
+    candidates = gateway.discover("Apple iPhone 17 256GB", 30)[:1]
+
+    offers = gateway.verify_region(
+        "Apple iPhone 17 256GB",
+        candidates,
+        get_region_target("110100"),
+    )
+
+    assert runner.calls[-1] == [
+        OPENCLI_EXECUTABLE,
+        "price-compare-jd",
+        "verify-region",
+        "Apple iPhone 17 256GB",
+        "--skus",
+        "100000000001",
+        "--province",
+        "北京市",
+        "--city",
+        "北京市",
+        "--district",
+        "朝阳区",
+        "--site-session",
+        "persistent",
+        "-f",
+        "json",
+    ]
+    assert [offer.platform_sku_id for offer in offers] == ["100000000001"]
+
+
+def test_verify_region_rejects_offer_outside_candidate_allowlist() -> None:
+    runner = FakeRunner(results=[
+        CommandResult(returncode=0, stdout=SEARCH_JSON, stderr=""),
+        CommandResult(
+            returncode=0,
+            stdout=VERIFY_JSON.replace("100000000001", "999999999999"),
+            stderr="",
+        ),
+    ])
+    gateway = OpenCliGateway(runner)
+    candidates = gateway.discover("Apple iPhone 17 256GB", 30)[:1]
+
+    with pytest.raises(GatewayFailure) as failure:
+        gateway.verify_region(
+            "Apple iPhone 17 256GB",
+            candidates,
+            get_region_target("110100"),
+        )
+
+    assert failure.value.code == "invalid_output"
+
+
 def test_diagnose_checks_only_the_installed_plugin_command_group() -> None:
     plugin_help = json.dumps({
         "site": "price-compare-jd",
-        "commands": [{"name": "search"}, {"name": "verify"}],
+        "commands": [
+            {"name": "search"},
+            {"name": "verify"},
+            {"name": "verify-region"},
+        ],
     })
     runner = FakeRunner(results=[
         CommandResult(returncode=0, stdout="{}", stderr=""),
-        CommandResult(returncode=0, stdout="doctor ok", stderr=""),
+        CommandResult(
+            returncode=0,
+            stdout="[OK] Extension: connected\n[OK] Connectivity: connected",
+            stderr="",
+        ),
         CommandResult(returncode=0, stdout=plugin_help, stderr=""),
     ])
 
@@ -156,6 +226,52 @@ def test_diagnose_checks_only_the_installed_plugin_command_group() -> None:
         "json",
     ]
     assert environment.plugin_ready is True
+
+
+def test_diagnose_requires_batch_region_command() -> None:
+    plugin_help = json.dumps({
+        "site": "price-compare-jd",
+        "commands": [{"name": "search"}, {"name": "verify"}],
+    })
+    runner = FakeRunner(results=[
+        CommandResult(returncode=0, stdout="{}", stderr=""),
+        CommandResult(
+            returncode=0,
+            stdout="[OK] Extension: connected\n[OK] Connectivity: connected",
+            stderr="",
+        ),
+        CommandResult(returncode=0, stdout=plugin_help, stderr=""),
+    ])
+
+    environment = OpenCliGateway(runner).diagnose()
+
+    assert environment.plugin_ready is False
+
+
+def test_diagnose_does_not_report_disconnected_bridge_as_ready() -> None:
+    plugin_help = json.dumps({
+        "site": "price-compare-jd",
+        "commands": [
+            {"name": "search"},
+            {"name": "verify"},
+            {"name": "verify-region"},
+        ],
+    })
+    runner = FakeRunner(results=[
+        CommandResult(returncode=0, stdout="{}", stderr=""),
+        CommandResult(
+            returncode=0,
+            stdout="[MISSING] Extension: not connected\n[FAIL] Connectivity: failed",
+            stderr="",
+        ),
+        CommandResult(returncode=0, stdout=plugin_help, stderr=""),
+    ])
+
+    environment = OpenCliGateway(runner).diagnose()
+
+    assert environment.opencli_available is True
+    assert environment.browser_bridge_ready is False
+    assert environment.safe_message == "请安装并连接 OpenCLI 浏览器扩展"
 
 
 def test_subprocess_runner_never_uses_a_shell(monkeypatch: pytest.MonkeyPatch) -> None:
