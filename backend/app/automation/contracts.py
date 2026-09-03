@@ -41,6 +41,8 @@ class VerifiedOffer:
     conditional_price_cents: int | None
     stock_status: str
     captured_at: datetime
+    sale_price_includes_coupon: bool = False
+    sale_price_includes_subsidy: bool = False
 
 
 @dataclass(frozen=True, slots=True)

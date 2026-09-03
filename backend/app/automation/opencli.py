@@ -92,6 +92,8 @@ class VerifiedOfferOutput(BaseModel):
     conditional_price_cents: int | None = Field(default=None, ge=0)
     stock_status: str = Field(min_length=1, max_length=40)
     captured_at: datetime
+    sale_price_includes_coupon: bool = False
+    sale_price_includes_subsidy: bool = False
 
 
 _EXIT_FAILURES = {
