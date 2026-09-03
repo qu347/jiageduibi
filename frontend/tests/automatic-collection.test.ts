@@ -82,6 +82,20 @@ describe('automatic collection card', () => {
     expect(wrapper.find('[data-testid="pause-automatic-collection"]').exists()).toBe(false)
   })
 
+  it('explains that nationwide collection runs in low-frequency batches', () => {
+    const wrapper = mount(AutomaticCollectionCard, {
+      props: {
+        run: run(),
+        tasks: [],
+        environment: null,
+        canStart: true,
+        loading: false,
+      },
+    })
+
+    expect(wrapper.text()).toContain('自动分批采集并留出冷却时间')
+  })
+
   it('requires a ready local browser environment before starting', () => {
     const wrapper = mount(AutomaticCollectionCard, {
       props: {

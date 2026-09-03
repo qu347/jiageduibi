@@ -114,6 +114,7 @@ const canRestart = computed(() => Boolean(
           失败 {{ run.failed_region_count }} · 跳过 {{ run.skipped_region_count }}
         </p>
       </div>
+      <p class="automation-note">系统会自动分批采集并留出冷却时间，减少触发京东访问频繁。</p>
       <p v-if="waitingInstruction" class="automation-user-action">{{ waitingInstruction }}</p>
       <p v-else-if="run.last_error_summary" class="automation-warning">{{ run.last_error_summary }}</p>
       <p v-else-if="run.pause_requested" class="automation-note">暂停请求已提交，将在当前浏览器操作完成后暂停。</p>

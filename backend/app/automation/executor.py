@@ -40,10 +40,18 @@ class CollectionExecutor:
         session_factory: Callable[[], Session],
         gateway_factory: Callable[[], BrowserGateway],
         retry_delays: tuple[float, float] = (0.0, 0.0),
+        region_delay_seconds: float = 8.0,
+        batch_size: int = 3,
+        batch_cooldown_seconds: float = 60.0,
+        sleeper: Callable[[float], None] = time.sleep,
     ) -> None:
         self._sessions = session_factory
         self._gateway_factory = gateway_factory
         self._retry_delays = retry_delays
+        self._region_delay_seconds = region_delay_seconds
+        self._batch_size = batch_size
+        self._batch_cooldown_seconds = batch_cooldown_seconds
+        self._sleeper = sleeper
 
     def execute(self, run_id: int) -> None:
         if not self._mark_running(run_id):
@@ -55,11 +63,20 @@ class CollectionExecutor:
                 self._fail_run(run_id, "empty_result", "没有找到可比较的候选商品")
                 return
 
-            for task_id in self._queued_task_ids(run_id):
+            task_ids = self._queued_task_ids(run_id)
+            for position, task_id in enumerate(task_ids, start=1):
                 if not self._may_continue(run_id):
                     return
                 if not self._execute_region(run_id, task_id, query, candidates, gateway):
                     return
+                if position < len(task_ids):
+                    delay = (
+                        self._batch_cooldown_seconds
+                        if position % self._batch_size == 0
+                        else self._region_delay_seconds
+                    )
+                    if delay > 0:
+                        self._sleeper(delay)
             self._finish_run(run_id)
         except GatewayFailure as exc:
             self._handle_run_gateway_failure(run_id, exc)

@@ -226,7 +226,13 @@ def execute_with(
     run_id: int,
 ) -> None:
     factory, _db = database
-    CollectionExecutor(factory, lambda: gateway, retry_delays=(0.0, 0.0)).execute(run_id)
+    CollectionExecutor(
+        factory,
+        lambda: gateway,
+        retry_delays=(0.0, 0.0),
+        region_delay_seconds=0.0,
+        batch_cooldown_seconds=0.0,
+    ).execute(run_id)
 
 
 def refresh(db: Session) -> None:
@@ -275,6 +281,41 @@ def test_batch_gateway_verifies_each_region_with_one_search_page(
     assert gateway.verify_region_calls[-1][2] == "650100"
     assert get_run(db, run_id).status == "completed"
     assert db.scalar(select(func.count(Offer.id))) == 62
+
+
+def test_executor_paces_regions_and_cools_down_after_each_batch(
+    database: tuple[sessionmaker[Session], Session],
+    run_id: int,
+) -> None:
+    factory, db = database
+    gateway = BatchGateway()
+    delays: list[float] = []
+    tasks = db.scalars(
+        select(CollectionRegionTask)
+        .where(CollectionRegionTask.collection_run_id == run_id)
+        .order_by(CollectionRegionTask.sequence)
+    ).all()
+    for task in tasks[4:]:
+        task.status = "skipped"
+    db.commit()
+
+    CollectionExecutor(
+        factory,
+        lambda: gateway,
+        retry_delays=(0.0, 0.0),
+        region_delay_seconds=2.0,
+        batch_size=3,
+        batch_cooldown_seconds=7.0,
+        sleeper=delays.append,
+    ).execute(run_id)
+
+    assert [call[2] for call in gateway.verify_region_calls] == [
+        "110100",
+        "120100",
+        "130100",
+        "140100",
+    ]
+    assert delays == [2.0, 2.0, 7.0]
 
 
 def test_rate_limit_pauses_batch_run_without_immediate_retries(
