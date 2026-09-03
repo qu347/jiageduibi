@@ -20,7 +20,7 @@ def test_automatic_collection_migration_adds_only_new_tables(alembic_config: Con
     before = set(inspect(engine).get_table_names())
     engine.dispose()
 
-    command.upgrade(alembic_config, "head")
+    command.upgrade(alembic_config, "0006_automatic_collection_runs")
     engine = create_engine(alembic_config.get_main_option("sqlalchemy.url"))
     after = set(inspect(engine).get_table_names())
     assert after - before == {
