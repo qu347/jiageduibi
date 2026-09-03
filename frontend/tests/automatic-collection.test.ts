@@ -44,6 +44,7 @@ describe('automatic collection card', () => {
           province: '上海市',
           city: '上海市',
           district: '浦东新区',
+          street: '陆家嘴街道',
           sequence: 9,
           status: 'running',
           attempts: 1,
@@ -61,7 +62,7 @@ describe('automatic collection card', () => {
     })
 
     expect(wrapper.get('[data-testid="automatic-progress"]').text()).toContain('已核验 3/31')
-    expect(wrapper.text()).toContain('当前地区：上海市')
+    expect(wrapper.text()).toContain('当前地区：上海市 / 浦东新区 / 陆家嘴街道')
     expect(wrapper.text()).toContain('候选 12/30')
     expect(wrapper.find('[data-testid="pause-automatic-collection"]').exists()).toBe(true)
   })

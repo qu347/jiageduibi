@@ -31,10 +31,17 @@ const environmentReady = computed(() => Boolean(
   && props.environment.plugin_ready,
 ))
 
+function taskAddress(task: CollectionRegionTaskView): string {
+  return [task.province, task.city, task.district, task.street]
+    .filter((part, index, parts) => index === 0 || part !== parts[index - 1])
+    .join(' / ')
+}
+
 const currentRegion = computed(() => {
   const code = props.run?.current_region_code
   if (!code) return null
-  return props.tasks.find((task) => task.region_code === code)?.province ?? code
+  const task = props.tasks.find((item) => item.region_code === code)
+  return task ? taskAddress(task) : code
 })
 
 const progressPercent = computed(() => {

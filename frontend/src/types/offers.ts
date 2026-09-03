@@ -130,6 +130,7 @@ export interface CollectionRegionTaskView {
   province: string
   city: string
   district: string
+  street: string
   sequence: number
   status: CollectionRegionTaskStatus
   attempts: number

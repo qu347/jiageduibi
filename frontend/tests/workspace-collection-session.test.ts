@@ -155,6 +155,7 @@ describe('workspace collection session', () => {
           province: '上海市',
           city: '上海市',
           district: '浦东新区',
+          street: '陆家嘴街道',
           sequence: 9,
           status: 'running',
           attempts: 1,
@@ -183,7 +184,7 @@ describe('workspace collection session', () => {
       expect.objectContaining({ method: 'POST' }),
     )
     expect(wrapper.get('[data-testid="automatic-progress"]').text()).toContain('已核验 3/31')
-    expect(wrapper.text()).toContain('当前地区：上海市')
+    expect(wrapper.text()).toContain('当前地区：上海市 / 浦东新区 / 陆家嘴街道')
     expect(localStorage.getItem('lastAutomaticRunId')).toBe('8')
     wrapper.unmount()
   })
