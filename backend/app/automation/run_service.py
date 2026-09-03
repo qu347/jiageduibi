@@ -63,6 +63,7 @@ def create_run(
             province=target.province,
             city=target.city,
             district=target.district,
+            street=target.street,
             sequence=target.sequence,
             status="queued",
             attempts=0,

@@ -60,6 +60,7 @@ class CollectionRegionTaskView(BaseModel):
     province: str
     city: str
     district: str
+    street: str
     sequence: int
     status: RegionTaskStatus
     attempts: int

@@ -113,6 +113,8 @@ def test_create_run_builds_31_ordered_tasks_for_national_collecting_session(
     assert [task.sequence for task in tasks] == list(range(1, 32))
     assert tasks[0].region_code == "110100"
     assert tasks[-1].region_code == "650100"
+    assert tasks[0].street == "奥运村街道"
+    assert tasks[-1].street == "解放南路街道"
 
 
 def test_create_run_rejects_invalid_sessions_platform_and_duplicate(

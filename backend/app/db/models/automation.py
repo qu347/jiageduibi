@@ -76,6 +76,7 @@ class CollectionRegionTask(Base):
     province: Mapped[str] = mapped_column(String(80))
     city: Mapped[str] = mapped_column(String(80))
     district: Mapped[str] = mapped_column(String(80))
+    street: Mapped[str] = mapped_column(String(80))
     sequence: Mapped[int] = mapped_column(Integer)
     status: Mapped[str] = mapped_column(String(32), index=True)
     attempts: Mapped[int] = mapped_column(Integer, default=0)

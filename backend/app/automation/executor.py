@@ -206,6 +206,7 @@ class CollectionExecutor:
                 province=task.province,
                 city=task.city,
                 district=task.district,
+                street=task.street,
                 sequence=task.sequence,
             )
             db.commit()
@@ -341,10 +342,11 @@ class CollectionExecutor:
             if task is None:
                 raise ValueError("地区采集任务不存在")
             now = datetime.now(UTC)
+            safe_summary = f"{_task_address(task)}：{failure.safe_message}"[:300]
             task.error_code = failure.code
-            task.error_summary = failure.safe_message
+            task.error_summary = safe_summary
             run.last_error_code = failure.code
-            run.last_error_summary = failure.safe_message
+            run.last_error_summary = safe_summary
             run.updated_at = now
             if failure.code in WAITING_CODES:
                 task.status = "waiting_user"
@@ -459,3 +461,11 @@ def _raw_offer(verified: VerifiedOffer, region: RegionTarget) -> RawOffer:
 
 def _is_out_of_stock(stock_status: str) -> bool:
     return stock_status.strip().casefold() in {"out_of_stock", "sold_out", "缺货", "无货"}
+
+
+def _task_address(task: CollectionRegionTask) -> str:
+    parts: list[str] = []
+    for part in (task.province, task.city, task.district, task.street):
+        if not parts or part != parts[-1]:
+            parts.append(part)
+    return " / ".join(parts)

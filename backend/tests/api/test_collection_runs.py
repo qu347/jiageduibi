@@ -81,6 +81,8 @@ def test_post_collection_run_creates_31_tasks_and_submits_once(
     assert len(tasks) == 31
     assert tasks[0]["province"] == "北京市"
     assert tasks[-1]["province"] == "新疆维吾尔自治区"
+    assert tasks[0]["street"] == "奥运村街道"
+    assert tasks[-1]["street"] == "解放南路街道"
 
 
 def test_run_controls_are_idempotent_and_resume_resubmits(

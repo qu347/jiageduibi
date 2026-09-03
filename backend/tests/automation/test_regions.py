@@ -10,6 +10,7 @@ def test_mainland_region_targets_are_exactly_31_unique_entries() -> None:
     assert not {"香港特别行政区", "澳门特别行政区", "台湾省"} & {
         item.province for item in MAINLAND_REGION_TARGETS
     }
+    assert all(item.street.strip() for item in MAINLAND_REGION_TARGETS)
 
 
 def test_region_catalog_uses_approved_representative_districts() -> None:
@@ -28,6 +29,9 @@ def test_region_catalog_uses_approved_representative_districts() -> None:
         "乌鲁木齐市",
         "天山区",
     )
+    assert beijing.street == "奥运村街道"
+    assert guangdong.street == "天河南街道"
+    assert xinjiang.street == "解放南路街道"
 
 
 def test_unknown_region_code_is_rejected() -> None:

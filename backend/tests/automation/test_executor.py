@@ -113,7 +113,7 @@ class FakeGateway:
 class BatchGateway(FakeGateway):
     def __init__(self) -> None:
         super().__init__()
-        self.verify_region_calls: list[tuple[str, tuple[str, ...], str]] = []
+        self.verify_region_calls: list[tuple[str, tuple[str, ...], str, str]] = []
 
     def verify_region(
         self,
@@ -125,6 +125,7 @@ class BatchGateway(FakeGateway):
             query,
             tuple(candidate.platform_sku_id for candidate in candidates),
             region.region_code,
+            region.street,
         ))
         if region.region_code in self.always_fail_regions:
             code = self.always_fail_regions[region.region_code]
@@ -277,8 +278,9 @@ def test_batch_gateway_verifies_each_region_with_one_search_page(
         "Apple iPhone 17 256GB",
         ("sku-cheapest", "sku-next"),
         "110100",
+        "奥运村街道",
     )
-    assert gateway.verify_region_calls[-1][2] == "650100"
+    assert gateway.verify_region_calls[-1][2:] == ("650100", "解放南路街道")
     assert get_run(db, run_id).status == "completed"
     assert db.scalar(select(func.count(Offer.id))) == 62
 
@@ -373,9 +375,13 @@ def test_network_error_retries_twice_then_continues_to_next_region(
     refresh(db)
 
     assert gateway.attempts_for("540100") == 3
-    assert get_task(db, run_id, "540100").status == "failed"
+    failed_task = get_task(db, run_id, "540100")
+    assert failed_task.status == "failed"
+    assert failed_task.error_summary == "西藏自治区 / 拉萨市 / 城关区 / 八廓街道：模拟 network_error"
     assert get_task(db, run_id, "610100").status == "completed"
-    assert get_run(db, run_id).status == "completed_partial"
+    run = get_run(db, run_id)
+    assert run.status == "completed_partial"
+    assert run.last_error_summary == "西藏自治区 / 拉萨市 / 城关区 / 八廓街道：模拟 network_error"
 
 
 def test_pause_after_gateway_checkpoint_requeues_current_region(
