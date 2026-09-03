@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import sys
 from io import BytesIO
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from PIL import Image
@@ -84,3 +86,17 @@ def test_default_ocr_uses_fixture_only_for_exact_test_environment_value(monkeypa
 
     monkeypatch.setenv('PRICE_COMPARE_OCR_FIXTURE', '1')
     assert isinstance(_default_ocr_engine_factory(), FixtureOcrEngine)
+
+
+def test_paddle_ocr_disables_incompatible_windows_mkldnn_path(monkeypatch) -> None:
+    received: dict[str, object] = {}
+
+    def fake_paddle_ocr(**kwargs):
+        received.update(kwargs)
+        return object()
+
+    monkeypatch.setitem(sys.modules, 'paddleocr', SimpleNamespace(PaddleOCR=fake_paddle_ocr))
+
+    PaddleOcrEngine()._get_engine()
+
+    assert received['enable_mkldnn'] is False

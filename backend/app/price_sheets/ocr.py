@@ -92,6 +92,7 @@ class PaddleOcrEngine:
             raise OcrUnavailableError("本机尚未安装 PaddleOCR") from exc
         self._engine = PaddleOCR(
             lang="ch",
+            enable_mkldnn=False,
             use_doc_orientation_classify=False,
             use_doc_unwarping=False,
             use_textline_orientation=False,
