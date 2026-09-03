@@ -154,6 +154,8 @@ const VERIFIED_COLUMNS = [
   'conditional_price_cents',
   'stock_status',
   'captured_at',
+  'sale_price_includes_coupon',
+  'sale_price_includes_subsidy',
 ]
 
 
@@ -243,7 +245,7 @@ cli({
       throw new CommandExecutionError('PAGE_CHANGED: 京东地区搜索结果结构未找到')
     }
 
-    const rows = normalizeSearchRows(await page.evaluate(extractSearchRows, 50), 50)
+    const rows = normalizeSearchRows(await page.evaluate(extractSearchRows, 50), 50, true)
     const offers = searchCandidatesToVerifiedOffers(rows, allowedSkus, new Date().toISOString())
     if (!offers.length) {
       throw new EmptyResultError('price-compare-jd verify-region', '该地区未显示候选白名单商品')

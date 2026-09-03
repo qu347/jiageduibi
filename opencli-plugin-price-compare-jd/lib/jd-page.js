@@ -97,6 +97,7 @@ export function extractSearchRows(limit, root = document) {
       url: legacyLink?.getAttribute('href') || (sku ? `https://item.jd.com/${sku}.html` : ''),
       shop_name: shop?.textContent || '未知店铺',
       platform_shop_id: shop?.getAttribute('data-shopid') || null,
+      card_text: node.textContent || '',
     }
   })
 }
@@ -165,11 +166,36 @@ export function extractVerifiedOffer(itemSku, root = document) {
     shippingText: text('.logistics-service', '#summary-service', '.delivery'),
     memberPrice: text('.plus-price', '[class*="member-price"]'),
     subsidyText: subsidy?.textContent?.replace(/\s+/g, ' ').trim() || '',
+    priceContext: text('.product-price-panel', '.summary-price'),
+    couponText: text('.summary-quan', '[class*="coupon"]'),
   }
 }
 
 
-export function normalizeSearchRows(rows, limit) {
+export function searchPriceSemantics(salePriceCents, cardText) {
+  const text = String(cardText ?? '').replace(/\s+/g, ' ').trim()
+  const includesCoupon = /到手价|券后价/.test(text)
+  const includesSubsidy = /国补领后价|国补后价/.test(text)
+  const conditional = /PLUS|会员|以旧换新|支付|白条|分期|新人|预约/i.test(text)
+  let coupon = 0
+  if (!includesCoupon && !conditional) {
+    const saleYuan = salePriceCents / 100
+    for (const match of text.matchAll(/券?满\s*(\d+)\s*减\s*(\d+)/g)) {
+      if (Number(match[1]) <= saleYuan) coupon = Math.max(coupon, Number(match[2]) * 100)
+    }
+  }
+  const subsidyMatch = text.match(/(?:国家补贴|政府补贴|国补)[^\d]{0,12}(?:减|省)\s*[￥¥]?\s*(\d+)/)
+  return {
+    platform_coupon_cents: coupon,
+    subsidy_amount_cents: subsidyMatch ? Number(subsidyMatch[1]) * 100 : 0,
+    subsidy_status: includesSubsidy || subsidyMatch ? 'confirmed' : 'unknown',
+    sale_price_includes_coupon: includesCoupon,
+    sale_price_includes_subsidy: includesSubsidy,
+  }
+}
+
+
+export function normalizeSearchRows(rows, limit, preservePriceSemantics = false) {
   if (!Array.isArray(rows)) return []
   const maximum = Math.min(50, Math.max(1, Number(limit) || 30))
   const seen = new Set()
@@ -194,7 +220,7 @@ export function normalizeSearchRows(rows, limit) {
 
     const shopName = String(row?.shop_name ?? '').replace(/\s+/g, ' ').trim() || '未知店铺'
     seen.add(sku)
-    output.push({
+    const candidate = {
       platform_sku_id: sku,
       title,
       product_url: productUrl,
@@ -202,7 +228,10 @@ export function normalizeSearchRows(rows, limit) {
       platform_shop_id: row?.platform_shop_id ? String(row.platform_shop_id) : null,
       shop_type: shopType(shopName),
       initial_price_cents: price,
-    })
+    }
+    output.push(preservePriceSemantics
+      ? { ...candidate, ...searchPriceSemantics(price, row?.card_text) }
+      : candidate)
     if (output.length >= maximum) break
   }
   return output
@@ -224,16 +253,18 @@ export function searchCandidatesToVerifiedOffers(candidates, allowedSkus, captur
       listed_price_cents: null,
       sale_price_cents: candidate.initial_price_cents,
       merchant_discount_cents: 0,
-      platform_coupon_cents: 0,
+      platform_coupon_cents: candidate.platform_coupon_cents ?? 0,
       member_discount_cents: 0,
       payment_discount_cents: 0,
-      subsidy_amount_cents: 0,
-      subsidy_status: 'unknown',
+      subsidy_amount_cents: candidate.subsidy_amount_cents ?? 0,
+      subsidy_status: candidate.subsidy_status ?? 'unknown',
       shipping_fee_cents: 0,
       installation_fee_cents: 0,
       conditional_price_cents: null,
       stock_status: 'in_stock',
       captured_at: capturedAt,
+      sale_price_includes_coupon: candidate.sale_price_includes_coupon ?? false,
+      sale_price_includes_subsidy: candidate.sale_price_includes_subsidy ?? false,
     }))
 }
 
@@ -264,6 +295,10 @@ export function normalizeVerifiedOffer(raw, capturedAt = new Date().toISOString(
   const stockText = String(raw?.stockText ?? '')
   const shippingText = String(raw?.shippingText ?? '')
   const subsidyText = String(raw?.subsidyText ?? '')
+  const semantics = searchPriceSemantics(
+    salePrice,
+    `${raw?.priceContext ?? ''} ${raw?.couponText ?? ''} ${subsidyText}`,
+  )
   const subsidyAmount = /国家补贴|政府补贴|国补/.test(subsidyText) ? cents(subsidyText) : null
   const stockStatus = /无货|缺货|暂不支持配送|不可配送/.test(stockText)
     ? 'out_of_stock'
@@ -280,15 +315,17 @@ export function normalizeVerifiedOffer(raw, capturedAt = new Date().toISOString(
     listed_price_cents: cents(String(raw?.listedPrice ?? '')),
     sale_price_cents: salePrice,
     merchant_discount_cents: 0,
-    platform_coupon_cents: 0,
+    platform_coupon_cents: semantics.platform_coupon_cents,
     member_discount_cents: 0,
     payment_discount_cents: 0,
-    subsidy_amount_cents: subsidyAmount ?? 0,
-    subsidy_status: subsidyAmount ? 'confirmed' : 'unknown',
+    subsidy_amount_cents: subsidyAmount ?? semantics.subsidy_amount_cents,
+    subsidy_status: subsidyAmount ? 'confirmed' : semantics.subsidy_status,
     shipping_fee_cents: shippingFee,
     installation_fee_cents: 0,
     conditional_price_cents: cents(String(raw?.memberPrice ?? '')),
     stock_status: stockStatus,
     captured_at: capturedAt,
+    sale_price_includes_coupon: semantics.sale_price_includes_coupon,
+    sale_price_includes_subsidy: semantics.sale_price_includes_subsidy,
   }
 }

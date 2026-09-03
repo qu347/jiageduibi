@@ -212,6 +212,8 @@ test('maps only allowed visible search candidates to region offers', () => {
     conditional_price_cents: null,
     stock_status: 'in_stock',
     captured_at: '2026-09-03T06:30:00.000Z',
+    sale_price_includes_coupon: false,
+    sale_price_includes_subsidy: false,
   }])
 })
 
@@ -263,4 +265,49 @@ test('normalizes a verified visible offer without inventing discounts', () => {
   assert.equal(offer.platform_coupon_cents, 0)
   assert.equal(offer.subsidy_status, 'unknown')
   assert.equal(offer.stock_status, 'in_stock')
+})
+
+
+test('preserves final-price labels and selects only an eligible ordinary coupon', () => {
+  const base = {
+    title: 'Apple iPhone 17 256GB 白色 全新国行',
+    url: '//item.jd.com/1001.html',
+    shop_name: '京东自营',
+  }
+  const rows = normalizeSearchRows([
+    { ...base, sku: '1001', price: '¥5419', card_text: '¥5419 国补领后价' },
+    { ...base, sku: '1002', price: '¥4399', card_text: '¥4399 到手价 券满2500减300 券满5000减430' },
+    { ...base, sku: '1003', price: '¥5999', card_text: '¥5999 券满2500减300 券满5000减430' },
+    { ...base, sku: '1004', price: '¥5999', card_text: 'PLUS专享 券满5000减600 以旧换新' },
+  ], 10, true)
+
+  assert.deepEqual(rows.map((row) => ({
+    sku: row.platform_sku_id,
+    coupon: row.platform_coupon_cents,
+    subsidy: row.subsidy_status,
+    includesCoupon: row.sale_price_includes_coupon,
+    includesSubsidy: row.sale_price_includes_subsidy,
+  })), [
+    { sku: '1001', coupon: 0, subsidy: 'confirmed', includesCoupon: false, includesSubsidy: true },
+    { sku: '1002', coupon: 0, subsidy: 'unknown', includesCoupon: true, includesSubsidy: false },
+    { sku: '1003', coupon: 43000, subsidy: 'unknown', includesCoupon: false, includesSubsidy: false },
+    { sku: '1004', coupon: 0, subsidy: 'unknown', includesCoupon: false, includesSubsidy: false },
+  ])
+})
+
+
+test('passes search-card price semantics into verified regional offers', () => {
+  const rows = normalizeSearchRows([{
+    sku: '1001',
+    title: 'Apple iPhone 17 256GB 白色 全新国行',
+    price: '¥5419',
+    card_text: '¥5419 国补领后价',
+    url: '//item.jd.com/1001.html',
+    shop_name: '京东自营',
+  }], 10, true)
+
+  const [offer] = searchCandidatesToVerifiedOffers(rows, ['1001'], '2026-09-03T06:30:00.000Z')
+
+  assert.equal(offer.sale_price_includes_subsidy, true)
+  assert.equal(offer.subsidy_status, 'confirmed')
 })
