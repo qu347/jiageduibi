@@ -10,6 +10,7 @@ from app.db.base import Base
 from app.db.models import catalog as _catalog
 from app.db.models import automation as _automation
 from app.db.models import offers as _offers
+from app.db.models import price_sheets as _price_sheets
 from app.db.models import settings as _settings
 from app.db.models import subsidy as _subsidy
 

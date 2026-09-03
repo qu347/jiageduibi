@@ -12,6 +12,12 @@ from app.db.models.offers import (
     SearchSession,
     Shop,
 )
+from app.db.models.price_sheets import (
+    PriceSheetBatch,
+    PriceSheetItem,
+    PriceSheetRegionResult,
+    PriceSheetRegionTask,
+)
 
 
 __all__ = [
@@ -25,6 +31,10 @@ __all__ = [
     "OfferMatch",
     "Platform",
     "PlatformProduct",
+    "PriceSheetBatch",
+    "PriceSheetItem",
+    "PriceSheetRegionResult",
+    "PriceSheetRegionTask",
     "PriceComponent",
     "PriceSnapshot",
     "ProductAlias",

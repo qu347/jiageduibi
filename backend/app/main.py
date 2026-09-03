@@ -1,6 +1,6 @@
 from pathlib import Path
 from collections.abc import Callable
-import os
+from datetime import UTC, datetime
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
@@ -13,6 +13,7 @@ from app.api.extension import router as extension_router
 from app.api.history import router as history_router
 from app.api.offers import router as offers_router
 from app.api.platforms import router as platforms_router
+from app.api.price_sheets import router as price_sheets_router
 from app.api.search_sessions import router as search_sessions_router
 from app.api.subsidy_rules import router as subsidy_rules_router
 from app.core.config import DEFAULT_DATABASE_URL, PROJECT_ROOT
@@ -25,6 +26,7 @@ from app.automation.opencli import OpenCliGateway, SubprocessCommandRunner
 from app.automation.run_service import recover_interrupted_runs
 from app.db.session import build_engine, session_factory
 from app.db.models.automation import CollectionRun
+from app.price_sheets.ocr import OcrEngine, PaddleOcrEngine
 
 
 APP_VERSION = "0.1.0"
@@ -44,12 +46,16 @@ def create_app(
     *,
     browser_gateway_factory: Callable[[], BrowserGateway] | None = None,
     collection_coordinator_factory: Callable[[CollectionExecutor], CollectionCoordinator] | None = None,
+    ocr_engine_factory: Callable[[], OcrEngine] | None = None,
+    clock: Callable[[], datetime] | None = None,
 ) -> FastAPI:
     app = FastAPI(title="个人国补比价工具", version=APP_VERSION)
     configured_database_url = database_url or DEFAULT_DATABASE_URL
     app.state.engine = build_engine(configured_database_url)
     app.state.session_factory = session_factory(app.state.engine)
     app.state.browser_gateway_factory = browser_gateway_factory or _default_browser_gateway_factory
+    app.state.ocr_engine_factory = ocr_engine_factory or PaddleOcrEngine
+    app.state.clock = clock or (lambda: datetime.now(UTC))
     queued_run_ids: list[int] = []
     if "collection_runs" in inspect(app.state.engine).get_table_names():
         with app.state.session_factory() as db:
@@ -93,6 +99,7 @@ def create_app(
     app.include_router(search_sessions_router)
     app.include_router(offers_router)
     app.include_router(platforms_router)
+    app.include_router(price_sheets_router)
     app.include_router(subsidy_rules_router)
 
     @app.get("/api/health")
