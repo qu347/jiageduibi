@@ -4,10 +4,15 @@ import { cli, Strategy } from '@jackwener/opencli/registry'
 import {
   extractVerifiedOffer,
   extractSearchRows,
+  newRegionAddressModeActive,
   normalizeSearchRows,
   normalizeVerifiedOffer,
   pageFailureCode,
+  REGION_PANEL_SELECTOR,
+  REGION_TAB_SELECTOR,
+  regionExactTextSelector,
   regionLabelCandidates,
+  regionFirstTabSelector,
   regionListLoading,
   regionOpenerSelector,
   regionSelectionConfirmed,
@@ -17,40 +22,13 @@ import {
 } from './lib/jd-page.js'
 
 
-async function exactTextSelector(page, wantedText) {
-  return page.evaluate((wantedValues) => {
-    const normalize = (value) => String(value || '').replace(/\s+/g, '').trim()
-    const wanted = new Set(wantedValues.map(normalize))
-    const visible = (element) => {
-      const style = window.getComputedStyle(element)
-      const rect = element.getBoundingClientRect()
-      return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0
-    }
-    const panels = Array.from(document.querySelectorAll(
-      '#area-selector, .ui-area-content-wrap, [class*="jd_area_wrap_"]',
-    )).filter(visible)
-    const nodes = panels.flatMap((panel) => Array.from(panel.querySelectorAll(
-      '[data-value], [data-id], [data-code], a, button, li, span',
-    ))).filter((node) => visible(node) && wanted.has(normalize(node.textContent)))
-    const element = nodes[0]
-    if (!element) return null
-    if (element.id) return `#${CSS.escape(element.id)}`
-    for (const attribute of ['data-value', 'data-id', 'data-code']) {
-      const value = element.getAttribute(attribute)
-      if (value) return `${element.tagName.toLowerCase()}[${attribute}="${CSS.escape(value)}"]`
-    }
-    const path = []
-    let current = element
-    while (current && current !== document.body) {
-      const siblings = Array.from(current.parentElement?.children || []).filter(
-        (sibling) => sibling.tagName === current.tagName,
-      )
-      const position = siblings.indexOf(current) + 1
-      path.unshift(`${current.tagName.toLowerCase()}:nth-of-type(${position})`)
-      current = current.parentElement
-    }
-    return `body > ${path.join(' > ')}`
-  }, Array.isArray(wantedText) ? wantedText : [wantedText])
+async function exactTextSelector(page, wantedText, excludeTabs = false) {
+  return page.evaluate(regionExactTextSelector, {
+    wantedValues: Array.isArray(wantedText) ? wantedText : [wantedText],
+    panelSelector: REGION_PANEL_SELECTOR,
+    tabSelector: REGION_TAB_SELECTOR,
+    shouldExcludeTabs: excludeTabs,
+  })
 }
 
 
@@ -74,7 +52,7 @@ function raisePageFailure(code) {
 async function waitForRegionOption(page, part) {
   const labels = regionLabelCandidates(part)
   for (let attempt = 0; attempt < 16; attempt += 1) {
-    const selector = await exactTextSelector(page, labels)
+    const selector = await exactTextSelector(page, labels, true)
     if (selector) return selector
     await page.wait(0.5)
   }
@@ -92,19 +70,15 @@ async function chooseRegion(page, province, city, district, street) {
   await page.wait(0.4)
 
   const newAddressTab = await exactTextSelector(page, '选择新地址')
-  if (newAddressTab) {
+  const newAddressActive = await page.evaluate(newRegionAddressModeActive)
+  if (newAddressTab && !newAddressActive) {
     await page.click(newAddressTab)
     await page.wait(0.4)
-    const firstRegionTab = await page.evaluate(() => {
-      const tab = document.querySelector('[class*="jd_area_wrap_"] a[data-id]')
-      return tab?.getAttribute('data-id')
-        ? `[class*="jd_area_wrap_"] a[data-id="${tab.getAttribute('data-id')}"]`
-        : null
-    })
-    if (firstRegionTab) {
-      await page.click(firstRegionTab)
-      await page.wait(0.4)
-    }
+  }
+  const firstRegionTab = await page.evaluate(regionFirstTabSelector)
+  if (firstRegionTab) {
+    await page.click(firstRegionTab)
+    await page.wait(0.4)
   }
 
   for (const part of regionSelectionPath(province, city, district, street)) {
@@ -115,19 +89,17 @@ async function chooseRegion(page, province, city, district, street) {
 
   await page.wait(1)
 
-  const state = await page.evaluate((openerSelector) => {
+  const state = await page.evaluate(({ openerSelector, panelSelector }) => {
     const visible = (element) => {
       const style = window.getComputedStyle(element)
       const rect = element.getBoundingClientRect()
       return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0
     }
-    const panels = Array.from(document.querySelectorAll(
-      '#area-selector, .ui-area-content-wrap, [class*="jd_area_wrap_"]',
-    )).filter(visible)
+    const panels = Array.from(document.querySelectorAll(panelSelector)).filter(visible)
     const selectedArea = document.querySelector(openerSelector)?.textContent || ''
     const pending = panels.some((panel) => /请选择/.test(panel.textContent || ''))
     return { selectedArea, pending }
-  }, opener)
+  }, { openerSelector: opener, panelSelector: REGION_PANEL_SELECTOR })
   if (!regionSelectionConfirmed({ district, street }, state)) {
     throw new CommandExecutionError('PAGE_CHANGED: 页面未确认目标区县和街道')
   }

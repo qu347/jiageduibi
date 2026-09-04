@@ -1,6 +1,14 @@
 const NON_TOTAL_PRICE = /月供|分期|定金|预售|起步|起价/
 const NON_NEW_PRODUCT = /二手|准新机|资源机|翻新机|官换机|展示机/
 
+export const REGION_PANEL_SELECTOR = [
+  '#area-selector',
+  '.ui-area-content-wrap',
+  '[class*="jd_area_wrap_"]',
+  '[class*="jd_area_content_"]',
+].join(', ')
+export const REGION_TAB_SELECTOR = '[class*="jd_tab_item_"], [class*="jd_tab_btn_item_"]'
+
 
 export function cents(value) {
   if (typeof value !== 'string') return null
@@ -35,6 +43,7 @@ export function waitForSearchResults(page, timeout = 10) {
 
 export function regionOpenerSelector(root = document) {
   const candidates = [
+    '#area-2024-search',
     '#area-2026',
     '#area-selector',
     '.ui-area-text',
@@ -74,6 +83,86 @@ export function regionOpenerSelector(root = document) {
     return `body > ${path.join(' > ')}`
   }
   return null
+}
+
+
+export function regionFirstTabSelector(root = document) {
+  const selectors = [
+    '[class*="jd_area_wrap_"] a[data-id]',
+    '[class*="jd_area_content_"] a[class*="jd_tab_item_"]',
+  ]
+  for (const selector of selectors) {
+    const tab = root.querySelector(selector)
+    if (!tab) continue
+    const dataId = tab.getAttribute('data-id')
+    if (dataId) return `[class*="jd_area_wrap_"] a[data-id="${CSS.escape(dataId)}"]`
+    return `${selector}:first-of-type`
+  }
+  return null
+}
+
+
+export function newRegionAddressModeActive(root = document) {
+  return Array.from(root.querySelectorAll('[class*="jd_tab_btn_item_active_"]')).some(
+    (element) => String(element.textContent || '').replace(/\s+/g, '').trim() === '选择新地址',
+  )
+}
+
+
+export function regionExactTextSelector({
+  wantedValues,
+  panelSelector,
+  tabSelector,
+  shouldExcludeTabs,
+}, root = document) {
+  const normalize = (value) => String(value || '').replace(/\s+/g, '').trim()
+  const wanted = new Set(wantedValues.map(normalize))
+  const view = root.defaultView
+  const layoutAvailable = Number.isFinite(view?.innerWidth)
+  const visible = (element) => {
+    const style = typeof view?.getComputedStyle === 'function'
+      ? view.getComputedStyle(element)
+      : null
+    const rect = typeof element.getBoundingClientRect === 'function'
+      ? element.getBoundingClientRect()
+      : null
+    return style?.display !== 'none'
+      && style?.visibility !== 'hidden'
+      && (!layoutAvailable || !rect || rect.width > 0 || rect.height > 0)
+  }
+  const panels = Array.from(root.querySelectorAll(panelSelector)).filter(visible)
+  const nodes = panels.flatMap((panel) => Array.from(panel.querySelectorAll(
+    '[data-value], [data-id], [data-code], a, button, li, span',
+  ))).filter((node) => (
+    visible(node)
+    && wanted.has(normalize(node.textContent))
+    && (!shouldExcludeTabs || !node.closest(tabSelector))
+  ))
+  const element = nodes[0]
+  if (!element) return null
+
+  const escape = view?.CSS?.escape ?? ((value) => String(value).replace(/["\\]/g, '\\$&'))
+  if (element.id) return `#${escape(element.id)}`
+  for (const attribute of ['data-value', 'data-id', 'data-code']) {
+    const value = element.getAttribute(attribute)
+    if (!value) continue
+    const base = `${element.tagName.toLowerCase()}[${attribute}="${escape(value)}"]`
+    const selector = shouldExcludeTabs
+      ? `${base}:not([class*="jd_tab_item_"]):not([class*="jd_tab_btn_item_"])`
+      : base
+    if (root.querySelectorAll(selector).length === 1) return selector
+  }
+
+  const path = []
+  let current = element
+  while (current && current !== root.body) {
+    const siblings = Array.from(current.parentElement?.children || []).filter(
+      (sibling) => sibling.tagName === current.tagName,
+    )
+    path.unshift(`${current.tagName.toLowerCase()}:nth-of-type(${siblings.indexOf(current) + 1})`)
+    current = current.parentElement
+  }
+  return `body > ${path.join(' > ')}`
 }
 
 
@@ -138,7 +227,9 @@ export function regionSelectionConfirmed({ district, street }, { selectedArea, p
 
 
 export function regionListLoading(root = document) {
-  return Boolean(root.querySelector('[class*="jd_area_wrap_"] [class*="loading"]'))
+  return Boolean(root.querySelector(
+    '[class*="jd_area_wrap_"] [class*="loading"], [class*="jd_area_content_"] [class*="loading"]',
+  ))
 }
 
 

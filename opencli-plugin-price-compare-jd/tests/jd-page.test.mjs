@@ -88,6 +88,70 @@ test('finds the unique current JD region opener', () => {
 })
 
 
+test('targets the current JD address trigger instead of its surrounding container', () => {
+  const { document } = parseHTML(`
+    <div class="_address-body_2vjjq_2">
+      <div id="area-2024-search">辽宁沈阳市大东区北海街道</div>
+    </div>
+  `)
+
+  assert.equal(jdPage.regionOpenerSelector?.(document), '#area-2024-search')
+})
+
+
+test('finds the province tab inside the current JD four-level region picker', () => {
+  const { document } = parseHTML(`
+    <div class="jd_area_content_DBbl4Ghq">
+      <div class="jd_tab_AiguoXPP">
+        <a class="jd_tab_item_nFo4Bt2F jd_tab_item_active_JtQdEbcH"><em>辽宁</em></a>
+        <a class="jd_tab_item_nFo4Bt2F"><em>沈阳市</em></a>
+        <a class="jd_tab_item_nFo4Bt2F"><em>大东区</em></a>
+        <a class="jd_tab_item_nFo4Bt2F"><em>北海街道</em></a>
+      </div>
+    </div>
+  `)
+
+  const selector = jdPage.regionFirstTabSelector?.(document)
+
+  assert.equal(document.querySelectorAll(jdPage.REGION_PANEL_SELECTOR ?? '').length, 1)
+  assert.ok(selector)
+  assert.equal(document.querySelector(selector)?.textContent.trim(), '辽宁')
+})
+
+
+test('recognizes when the current JD new-address mode is already active', () => {
+  const { document } = parseHTML(`
+    <ul>
+      <li class="jd_tab_btn_item_cfNZuVYM">常用地址</li>
+      <li class="jd_tab_btn_item_cfNZuVYM jd_tab_btn_item_active_RGiA6bhy">选择新地址</li>
+    </ul>
+  `)
+
+  assert.equal(jdPage.newRegionAddressModeActive?.(document), true)
+})
+
+
+test('does not mistake the selected region tab for a selectable region option', () => {
+  const { document } = parseHTML(`
+    <div class="jd_area_content_DBbl4Ghq">
+      <a class="jd_tab_item_nFo4Bt2F jd_tab_item_active_JtQdEbcH" data-id="8">辽宁</a>
+      <div class="jd_area_list_x1"><a data-id="8">辽宁</a></div>
+    </div>
+  `)
+  const [selectedTab, provinceOption] = document.querySelectorAll('a')
+  const selector = jdPage.regionExactTextSelector?.({
+    wantedValues: ['辽宁'],
+    panelSelector: jdPage.REGION_PANEL_SELECTOR,
+    tabSelector: jdPage.REGION_TAB_SELECTOR,
+    shouldExcludeTabs: true,
+  }, document)
+
+  assert.notEqual(selector, 'a[data-id="8"]')
+  assert.equal(document.querySelector(selector), provinceOption)
+  assert.notEqual(document.querySelector(selector), selectedTab)
+})
+
+
 test('matches official region names to JD short labels', () => {
   assert.deepEqual(jdPage.regionLabelCandidates?.('北京市'), ['北京市', '北京'])
   assert.deepEqual(jdPage.regionLabelCandidates?.('新疆维吾尔自治区'), ['新疆维吾尔自治区', '新疆'])
@@ -122,6 +186,12 @@ test('requires both district and street with no pending selector', () => {
 
 test('detects a stalled current JD region list', () => {
   const { document } = parseHTML('<div class="jd_area_wrap_hash"><i class="jd_loading_hash"></i></div>')
+  assert.equal(jdPage.regionListLoading?.(document), true)
+})
+
+
+test('detects loading state inside the current JD four-level region picker', () => {
+  const { document } = parseHTML('<div class="jd_area_content_hash"><i class="jd_loading_hash"></i></div>')
   assert.equal(jdPage.regionListLoading?.(document), true)
 })
 
