@@ -67,7 +67,7 @@ def _has_exact_color(title: str, color: str) -> bool:
 def select_price_sheet_candidates(
     target: PriceSheetTarget,
     candidates: list[DiscoveredCandidate],
-    limit: int = 15,
+    limit: int = 20,
 ) -> list[DiscoveredCandidate]:
     target_model = _model_key(target.model_name)
     target_storage = _storage_key(target.storage)

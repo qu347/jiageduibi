@@ -40,11 +40,11 @@ def test_selection_excludes_wrong_version_condition_accessories_and_conditional_
     assert [row.platform_sku_id for row in select_price_sheet_candidates(target, rows)] == ['99']
 
 
-def test_selection_is_stably_sorted_and_limited() -> None:
+def test_selection_is_stably_sorted_and_defaults_to_twenty() -> None:
     target = PriceSheetTarget('Apple', 'iPhone 17', '256GB', '白色')
-    rows = [candidate(str(index).zfill(2), 'Apple iPhone 17 256GB 白色 全新国行', 500_000 - index) for index in range(20)]
+    rows = [candidate(str(index).zfill(2), 'Apple iPhone 17 256GB 白色 全新国行', 500_000 - index) for index in range(25)]
 
-    selected = select_price_sheet_candidates(target, rows, limit=15)
+    selected = select_price_sheet_candidates(target, rows)
 
-    assert len(selected) == 15
-    assert [row.platform_sku_id for row in selected[:2]] == ['19', '18']
+    assert len(selected) == 20
+    assert [row.platform_sku_id for row in selected[:2]] == ['24', '23']
