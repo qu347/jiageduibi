@@ -114,3 +114,56 @@ class PriceSheetRegionResult(Base):
     sale_price_includes_subsidy: Mapped[bool] = mapped_column(Boolean, default=False)
     stock_status: Mapped[str] = mapped_column(String(40))
     captured_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class PriceSheetCheckoutTask(Base):
+    __tablename__ = "price_sheet_checkout_tasks"
+    __table_args__ = (
+        UniqueConstraint(
+            "price_sheet_item_id", "region_code", "platform_sku_id",
+            name="uq_price_sheet_checkout_item_region_sku",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    price_sheet_item_id: Mapped[int] = mapped_column(ForeignKey("price_sheet_items.id"), index=True)
+    region_code: Mapped[str] = mapped_column(String(12), index=True)
+    platform_sku_id: Mapped[str] = mapped_column(String(160))
+    sequence: Mapped[int] = mapped_column(Integer)
+    status: Mapped[str] = mapped_column(String(32), index=True)
+    entry_mode: Mapped[str | None] = mapped_column(String(32))
+    attempt_count: Mapped[int] = mapped_column(Integer, default=0)
+    error_code: Mapped[str | None] = mapped_column(String(64))
+    error_summary: Mapped[str | None] = mapped_column(Text)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class PriceSheetCheckoutResult(Base):
+    __tablename__ = "price_sheet_checkout_results"
+    __table_args__ = (
+        UniqueConstraint("checkout_task_id", name="uq_price_sheet_checkout_result_task"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    checkout_task_id: Mapped[int] = mapped_column(ForeignKey("price_sheet_checkout_tasks.id"), index=True)
+    title: Mapped[str] = mapped_column(Text)
+    product_url: Mapped[str] = mapped_column(Text)
+    shop_name: Mapped[str] = mapped_column(String(200))
+    shop_type: Mapped[str] = mapped_column(String(40))
+    quantity: Mapped[int] = mapped_column(Integer, default=0)
+    target_only: Mapped[bool] = mapped_column(Boolean, default=False)
+    line_original_price_cents: Mapped[int | None] = mapped_column(Integer)
+    line_sale_price_cents: Mapped[int | None] = mapped_column(Integer)
+    merchant_discount_cents: Mapped[int] = mapped_column(Integer, default=0)
+    ordinary_coupon_cents: Mapped[int] = mapped_column(Integer, default=0)
+    subsidy_amount_cents: Mapped[int] = mapped_column(Integer, default=0)
+    shipping_fee_cents: Mapped[int] = mapped_column(Integer, default=0)
+    payable_price_cents: Mapped[int | None] = mapped_column(Integer)
+    discount_summary: Mapped[str] = mapped_column(Text, default="")
+    conditional_reason: Mapped[str | None] = mapped_column(Text)
+    unavailable_code: Mapped[str | None] = mapped_column(String(64))
+    price_status: Mapped[str] = mapped_column(String(32), index=True)
+    region_confirmed: Mapped[bool] = mapped_column(Boolean, default=False)
+    cart_restored: Mapped[bool] = mapped_column(Boolean, default=True)
+    captured_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

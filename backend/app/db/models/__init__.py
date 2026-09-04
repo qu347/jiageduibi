@@ -14,6 +14,8 @@ from app.db.models.offers import (
 )
 from app.db.models.price_sheets import (
     PriceSheetBatch,
+    PriceSheetCheckoutResult,
+    PriceSheetCheckoutTask,
     PriceSheetItem,
     PriceSheetRegionResult,
     PriceSheetRegionTask,
@@ -32,6 +34,8 @@ __all__ = [
     "Platform",
     "PlatformProduct",
     "PriceSheetBatch",
+    "PriceSheetCheckoutResult",
+    "PriceSheetCheckoutTask",
     "PriceSheetItem",
     "PriceSheetRegionResult",
     "PriceSheetRegionTask",
