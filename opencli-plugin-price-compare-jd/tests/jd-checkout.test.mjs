@@ -115,6 +115,42 @@ test('extracts a verified one-item checkout without inferring discounts', () => 
 })
 
 
+test('extracts the guarded fields from JD-style checkout selectors', () => {
+  const { document } = parseHTML(`
+    <div class="consignee-item item-selected"><span class="addr-detail">北京市 朝阳区 奥运村街道</span></div>
+    <div id="order_ware_list">
+      <div class="goods-item" data-sku="1001">
+        <div class="p-name">Apple iPhone 17 256GB 黑色</div>
+        <div class="shop-name">Apple产品京东自营旗舰店</div>
+        <div class="p-num">x1</div>
+        <div class="p-price">¥5,419</div>
+      </div>
+    </div>
+    <div class="order-summary">
+      <div class="coupon-discount"><span class="price">¥100</span></div>
+      <div class="subsidy-discount"><span class="price">¥400</span></div>
+      <div class="freight-price">¥0</div>
+      <div class="discount-summary">优惠券 100 元；国家补贴 400 元</div>
+      <strong id="sumPayPriceId">¥5,419</strong>
+    </div>
+  `)
+
+  const result = runAsBrowserEvaluation(
+    extractCheckoutPreview,
+    { sku: '1001', district: '朝阳区', street: '奥运村街道' },
+    document,
+  )
+
+  assert.equal(result.priceStatus, 'verified')
+  assert.equal(result.quantity, 1)
+  assert.equal(result.targetOnly, true)
+  assert.equal(result.lineSalePriceCents, 541900)
+  assert.equal(result.ordinaryCouponCents, 10000)
+  assert.equal(result.subsidyAmountCents, 40000)
+  assert.equal(result.payablePriceCents, 541900)
+})
+
+
 test('marks qualification-based checkout prices as conditional', () => {
   const { document } = parseHTML(`
     <div data-opencli-checkout-address>广东省 广州市 天河区 石牌街道</div>

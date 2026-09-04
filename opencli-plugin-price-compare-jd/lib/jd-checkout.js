@@ -69,20 +69,38 @@ export function extractCheckoutPreview(expected, root = document) {
     const result = yuan * 100 + fen
     return result > 0 ? result : null
   }
-  const readPrice = (view, name) => parseMoney(
-    view.querySelector(`[data-opencli-price="${name}"]`)?.textContent,
-  )
+  const priceSelectors = {
+    original: ['[data-opencli-price="original"]', '.price-original', '.p-price del'],
+    sale: ['[data-opencli-price="sale"]', '.p-price', '.jd-price'],
+    merchant: ['[data-opencli-price="merchant"]', '.merchant-discount .price', '[data-type="merchant"] .price'],
+    coupon: ['[data-opencli-price="coupon"]', '.coupon-discount .price', '[data-type="coupon"] .price'],
+    subsidy: ['[data-opencli-price="subsidy"]', '.subsidy-discount .price', '[data-type="subsidy"] .price'],
+    shipping: ['[data-opencli-price="shipping"]', '.freight-price', '[data-type="freight"] .price'],
+    payable: ['[data-opencli-price="payable"]', '#sumPayPriceId', '.pay-price', '.payment-price .price'],
+  }
+  const readPrice = (view, name) => {
+    if (!view) return null
+    const selector = priceSelectors[name].find((value) => view.querySelector(value))
+    return parseMoney(selector ? view.querySelector(selector)?.textContent : '')
+  }
   const bodyText = normalize(
     root.body?.textContent || root.documentElement?.textContent || root.textContent,
   ).slice(0, 20000)
-  const addressText = normalize(root.querySelector('[data-opencli-checkout-address]')?.textContent)
-  const lines = Array.from(root.querySelectorAll('[data-opencli-checkout-line]'))
+  const addressText = normalize(root.querySelector(
+    '[data-opencli-checkout-address], .consignee-item.item-selected .addr-detail, .consignee-item.item-selected',
+  )?.textContent)
+  const lines = Array.from(root.querySelectorAll(
+    '[data-opencli-checkout-line], #order_ware_list .goods-item[data-sku], .order-item[data-sku]',
+  ))
   const targetLines = lines.filter((line) => String(line.getAttribute('data-sku') || '') === String(expected.sku))
   const line = targetLines[0] ?? null
-  const quantity = Number(line?.getAttribute('data-quantity') || 0)
+  const quantityText = normalize(line?.querySelector('.p-num, .quantity')?.textContent)
+  const quantity = Number(line?.getAttribute('data-quantity') || quantityText.match(/\d+/)?.[0] || 0)
   const targetOnly = lines.length === 1 && targetLines.length === 1
   const regionConfirmed = addressText.includes(String(expected.district)) && addressText.includes(String(expected.street))
-  const summary = normalize(root.querySelector('[data-opencli-discount-summary]')?.textContent).slice(0, 2000)
+  const summary = normalize(root.querySelector(
+    '[data-opencli-discount-summary], .discount-summary',
+  )?.textContent).slice(0, 2000)
   const conditionalLabels = [
     [/PLUS|会员/, 'PLUS会员'],
     [/新人/, '新人优惠'],
@@ -94,8 +112,8 @@ export function extractCheckoutPreview(expected, root = document) {
   ]
   const conditionalReason = conditionalLabels.find(([pattern]) => pattern.test(summary || bodyText))?.[1] ?? null
   const base = {
-    title: normalize(line?.querySelector('[data-opencli-title]')?.textContent),
-    shopName: normalize(line?.querySelector('[data-opencli-shop]')?.textContent),
+    title: normalize(line?.querySelector('[data-opencli-title], .p-name, .goods-name')?.textContent),
+    shopName: normalize(line?.querySelector('[data-opencli-shop], .shop-name')?.textContent),
     quantity,
     targetOnly,
     lineOriginalPriceCents: readPrice(line || root, 'original'),
