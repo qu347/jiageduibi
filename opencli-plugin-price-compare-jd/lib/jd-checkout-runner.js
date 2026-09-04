@@ -30,9 +30,11 @@ export function readPageMarkers(input = {}, root = document) {
 
 
 export function extractItemState(expectedSku, root = document) {
-  const marker = root.querySelector('[data-opencli-item], [data-sku]')
+  const declaredMarker = root.querySelector('[data-opencli-item]')
+  const matchingMarker = root.querySelector(`[data-sku="${String(expectedSku)}"]`)
+  const marker = declaredMarker || matchingMarker
   const quantityInput = root.querySelector('#buy-num, .choose-amount input, [class*="quantity"] input')
-  const sku = String(marker?.getAttribute('data-sku') || '')
+  const sku = String(marker?.getAttribute('data-sku') || expectedSku)
   const quantity = Number(marker?.getAttribute('data-quantity') || quantityInput?.value || 1)
   const bodyText = String(root.body?.innerText || root.body?.textContent || '')
   const stock = marker?.getAttribute('data-stock') || (/无货|缺货|不可配送/.test(bodyText) ? 'out_of_stock' : 'in_stock')
@@ -93,6 +95,16 @@ function ensureSafe(pageMarkers, classifyPage = () => null) {
 function isCheckoutPreviewUrl(url) {
   const value = String(url).toLowerCase()
   return /trade\.jd\.com/.test(value) && /shopping\/order|getorderinfo/.test(value)
+}
+
+
+function isExpectedItemUrl(url, sku) {
+  try {
+    const parsed = new URL(String(url))
+    return parsed.hostname === 'item.jd.com' && parsed.pathname === `/${sku}.html`
+  } catch {
+    return false
+  }
 }
 
 
@@ -176,9 +188,17 @@ export async function runCheckoutPreview(page, args, dependencies = {}) {
   }
   const productUrl = `https://item.jd.com/${args.sku}.html`
   await page.goto(productUrl)
-  ensureSafe(await markers(page), classifyPage)
+  const initialMarkers = await markers(page)
+  ensureSafe(initialMarkers, classifyPage)
+  if (!isExpectedItemUrl(initialMarkers.url, args.sku)) {
+    throw new CheckoutCommandError('SKU_UNCONFIRMED', '商品页 URL 与目标 SKU 不一致')
+  }
   await chooseRegion(page, args.areaId, args.province, args.city, args.district, args.street)
-  ensureSafe(await markers(page), classifyPage)
+  const regionalMarkers = await markers(page)
+  ensureSafe(regionalMarkers, classifyPage)
+  if (!isExpectedItemUrl(regionalMarkers.url, args.sku)) {
+    throw new CheckoutCommandError('SKU_UNCONFIRMED', '切换地区后商品页 URL 与目标 SKU 不一致')
+  }
 
   const item = await page.evaluate(extractItemState, String(args.sku))
   if (item.sku !== String(args.sku) || item.quantity !== 1) {

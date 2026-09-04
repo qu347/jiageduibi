@@ -325,6 +325,30 @@ test('buy-now workflow performs no click after reaching checkout', async () => {
 })
 
 
+test('buy-now workflow confirms SKU from the JD item URL when the page has no data marker', async () => {
+  const page = new FakeCheckoutPage()
+  const originalGoto = page.goto.bind(page)
+  page.goto = async (url) => {
+    await originalGoto(url)
+    if (url.includes('item.jd.com')) {
+      page.document = parseHTML(`
+        <html><head><title>Apple iPhone 17</title></head><body>
+          <input id="buy-num" value="1"><button id="buy">立即购买</button>
+        </body></html>
+      `).document
+    }
+  }
+
+  const [result] = await runCheckoutPreview(page, {
+    sku: '1001', province: '北京市', city: '北京市', district: '朝阳区', street: '奥运村街道',
+    areaId: '1-72-55652-0', allowCartFallback: false,
+  }, { chooseRegion: async () => {} })
+
+  assert.equal(result.platform_sku_id, '1001')
+  assert.deepEqual(page.clicks, ['#buy'])
+})
+
+
 test('buy-now workflow stops immediately at a payment boundary', async () => {
   const page = new FakeCheckoutPage('cashier')
 
