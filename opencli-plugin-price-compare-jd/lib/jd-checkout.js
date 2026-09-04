@@ -143,9 +143,15 @@ export function extractCheckoutPreview(expected, root = document) {
 export function snapshotCart(input, evaluatedRoot) {
   const root = evaluatedRoot || (input?.querySelectorAll ? input : document)
   return {
-    rows: Array.from(root.querySelectorAll('[data-opencli-cart-line]')).map((line) => ({
+    rows: Array.from(root.querySelectorAll(
+      '[data-opencli-cart-line], .item-item[data-sku], [class*="cart-item"][data-sku]',
+    )).map((line) => ({
       sku: String(line.getAttribute('data-sku') || ''),
-      quantity: Number(line.getAttribute('data-quantity') || 0),
+      quantity: Number(
+        line.getAttribute('data-quantity')
+        || line.querySelector('input.itxt, [class*="quantity"] input')?.value
+        || 0,
+      ),
       selected: (() => {
         const checkbox = line.querySelector('input[type="checkbox"]')
         return typeof checkbox?.checked === 'boolean' ? checkbox.checked : Boolean(checkbox?.hasAttribute('checked'))

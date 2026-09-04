@@ -235,6 +235,20 @@ test('captures cart state and verifies exact restoration after removing the adde
 })
 
 
+test('captures JD-style cart rows before attempting isolation', () => {
+  const { document } = parseHTML(`
+    <div class="item-item" data-sku="2002">
+      <input type="checkbox" checked>
+      <input class="itxt" value="2">
+    </div>
+  `)
+
+  assert.deepEqual(runAsBrowserEvaluation(snapshotCart, undefined, document), {
+    rows: [{ sku: '2002', quantity: 2, selected: true }],
+  })
+})
+
+
 class FakeCheckoutPage {
   constructor(destination = 'checkout') {
     this.destination = destination
