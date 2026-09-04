@@ -16,7 +16,7 @@ from app.automation.contracts import (
     RegionBatchGateway,
     VerifiedOffer,
 )
-from app.automation.regions import RegionTarget
+from app.automation.regions import RegionTarget, get_region_target
 from app.automation.run_service import refresh_run_counts, require_run
 from app.db.models.automation import CollectionCandidate, CollectionRegionTask
 from app.db.models.offers import SearchSession
@@ -208,6 +208,7 @@ class CollectionExecutor:
                 district=task.district,
                 street=task.street,
                 sequence=task.sequence,
+                jd_area_id=get_region_target(task.region_code).jd_area_id,
             )
             db.commit()
 

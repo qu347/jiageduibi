@@ -7,11 +7,26 @@ import * as jdPage from '../lib/jd-page.js'
 
 const {
   cents,
+  installJdRegionCookie,
+  jdRegionCookieAssignment,
   normalizeSearchRows,
   normalizeVerifiedOffer,
   pageFailureCode,
   searchCandidatesToVerifiedOffers,
 } = jdPage
+
+
+test('builds and installs the JD four-level region cookie', () => {
+  assert.equal(
+    jdRegionCookieAssignment?.('1-72-55652-0'),
+    'ipLoc-djd=1-72-55652-0; Domain=.jd.com; Path=/; Max-Age=31536000; SameSite=Lax',
+  )
+  assert.equal(jdRegionCookieAssignment?.('1-72-0'), null)
+
+  const root = { cookie: '' }
+  assert.equal(installJdRegionCookie?.('19-1601-3633-63249', root), true)
+  assert.equal(root.cookie, 'ipLoc-djd=19-1601-3633-63249; Domain=.jd.com; Path=/; Max-Age=31536000; SameSite=Lax')
+})
 
 
 test('converts visible RMB text to integer cents', () => {
@@ -135,7 +150,9 @@ test('does not mistake the selected region tab for a selectable region option', 
   const { document } = parseHTML(`
     <div class="jd_area_content_DBbl4Ghq">
       <a class="jd_tab_item_nFo4Bt2F jd_tab_item_active_JtQdEbcH" data-id="8">辽宁</a>
-      <div class="jd_area_list_x1"><a data-id="8">辽宁</a></div>
+      <ul class="jd_area_content_list_x1">
+        <li><div><a data-id="8">辽宁</a></div></li>
+      </ul>
     </div>
   `)
   const [selectedTab, provinceOption] = document.querySelectorAll('a')
@@ -147,8 +164,10 @@ test('does not mistake the selected region tab for a selectable region option', 
   }, document)
 
   assert.notEqual(selector, 'a[data-id="8"]')
+  assert.match(selector, /^a\[/)
   assert.equal(document.querySelector(selector), provinceOption)
   assert.notEqual(document.querySelector(selector), selectedTab)
+  assert.equal(document.querySelector(selector)?.tagName, 'A')
 })
 
 

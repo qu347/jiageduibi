@@ -10,6 +10,23 @@ export const REGION_PANEL_SELECTOR = [
 export const REGION_TAB_SELECTOR = '[class*="jd_tab_item_"], [class*="jd_tab_btn_item_"]'
 
 
+export function jdRegionCookieAssignment(areaId) {
+  const value = String(areaId ?? '').trim()
+  if (!/^[1-9]\d*-[1-9]\d*-[1-9]\d*-(?:0|[1-9]\d*)$/.test(value)) return null
+  return `ipLoc-djd=${value}; Domain=.jd.com; Path=/; Max-Age=31536000; SameSite=Lax`
+}
+
+
+export function installJdRegionCookie(areaId, root = document) {
+  const value = String(areaId ?? '').trim()
+  if (!/^[1-9]\d*-[1-9]\d*-[1-9]\d*-(?:0|[1-9]\d*)$/.test(value)) return false
+  root.cookie = `ipLoc-djd=${value}; Domain=.jd.com; Path=/; Max-Age=31536000; SameSite=Lax`
+  return String(root.cookie || '').split(';').some(
+    (part) => part.trim() === `ipLoc-djd=${value}`,
+  )
+}
+
+
 export function cents(value) {
   if (typeof value !== 'string') return null
   const normalized = value.replace(/\s+/g, ' ').trim()
@@ -138,7 +155,9 @@ export function regionExactTextSelector({
     && wanted.has(normalize(node.textContent))
     && (!shouldExcludeTabs || !node.closest(tabSelector))
   ))
-  const element = nodes[0]
+  const element = nodes.find((node) => node.matches('a, button'))
+    ?? nodes.find((node) => node.matches('[data-value], [data-id], [data-code]'))
+    ?? nodes[0]
   if (!element) return null
 
   const escape = view?.CSS?.escape ?? ((value) => String(value).replace(/["\\]/g, '\\$&'))

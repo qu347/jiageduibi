@@ -4,6 +4,8 @@ import { cli, Strategy } from '@jackwener/opencli/registry'
 import {
   extractVerifiedOffer,
   extractSearchRows,
+  installJdRegionCookie,
+  jdRegionCookieAssignment,
   newRegionAddressModeActive,
   normalizeSearchRows,
   normalizeVerifiedOffer,
@@ -63,7 +65,7 @@ async function waitForRegionOption(page, part) {
 }
 
 
-async function chooseRegion(page, province, city, district, street) {
+async function chooseRegionWithPicker(page, province, city, district, street) {
   const opener = await page.evaluate(regionOpenerSelector)
   if (!opener) throw new CommandExecutionError('UNSUPPORTED_REGION: 找不到京东地区选择器')
   await page.click(opener)
@@ -106,6 +108,40 @@ async function chooseRegion(page, province, city, district, street) {
 }
 
 
+async function regionCookieWasApplied(page, district, street) {
+  for (let attempt = 0; attempt < 16; attempt += 1) {
+    const opener = await page.evaluate(regionOpenerSelector)
+    if (opener) {
+      const selectedArea = await page.evaluate(
+        (selector) => document.querySelector(selector)?.textContent || '',
+        opener,
+      )
+      if (regionSelectionConfirmed({ district, street }, { selectedArea, pending: false })) {
+        return true
+      }
+    }
+    await page.wait(0.5)
+  }
+  return false
+}
+
+
+async function chooseRegion(page, areaId, province, city, district, street) {
+  if (!jdRegionCookieAssignment(areaId)) {
+    throw new CommandExecutionError('UNSUPPORTED_REGION: 京东地区编码格式无效')
+  }
+
+  const installed = await page.evaluate(installJdRegionCookie, String(areaId))
+  if (installed) {
+    const currentUrl = await page.evaluate(() => window.location.href)
+    await page.goto(currentUrl)
+    if (await regionCookieWasApplied(page, district, street)) return
+  }
+
+  await chooseRegionWithPicker(page, province, city, district, street)
+}
+
+
 const VERIFIED_COLUMNS = [
   'platform_sku_id',
   'title',
@@ -145,9 +181,12 @@ cli({
     { name: 'city', required: true, help: 'City display name' },
     { name: 'district', required: true, help: 'District display name' },
     { name: 'street', required: true, help: 'Street or town display name' },
+    { name: 'area-id', required: true, help: 'JD four-level area ID' },
   ],
   columns: VERIFIED_COLUMNS,
-  func: async (page, { sku, province, city, district, street }) => {
+  func: async (page, kwargs) => {
+    const { sku, province, city, district, street } = kwargs
+    const areaId = kwargs['area-id']
     const normalizedSku = String(sku)
     if (!/^\d{5,30}$/.test(normalizedSku)) {
       throw new CommandExecutionError('PAGE_CHANGED: 京东 SKU 格式无效')
@@ -156,7 +195,9 @@ cli({
     let markers = await pageMarkers(page)
     raisePageFailure(pageFailureCode(markers.title, markers.bodyText))
 
-    await chooseRegion(page, String(province), String(city), String(district), String(street))
+    await chooseRegion(
+      page, String(areaId), String(province), String(city), String(district), String(street),
+    )
     markers = await pageMarkers(page)
     raisePageFailure(pageFailureCode(markers.title, markers.bodyText))
 
@@ -183,9 +224,12 @@ cli({
     { name: 'city', required: true, help: 'City display name' },
     { name: 'district', required: true, help: 'District display name' },
     { name: 'street', required: true, help: 'Street or town display name' },
+    { name: 'area-id', required: true, help: 'JD four-level area ID' },
   ],
   columns: VERIFIED_COLUMNS,
-  func: async (page, { query, skus, province, city, district, street }) => {
+  func: async (page, kwargs) => {
+    const { query, skus, province, city, district, street } = kwargs
+    const areaId = kwargs['area-id']
     const normalizedQuery = String(query).replace(/\s+/g, ' ').trim()
     const allowedSkus = [...new Set(String(skus).split(',').map((sku) => sku.trim()).filter(Boolean))]
     if (!normalizedQuery || normalizedQuery.length > 200 || !allowedSkus.length || allowedSkus.length > 50) {
@@ -206,7 +250,9 @@ cli({
       throw new CommandExecutionError('PAGE_CHANGED: 京东搜索结果结构未找到')
     }
 
-    await chooseRegion(page, String(province), String(city), String(district), String(street))
+    await chooseRegion(
+      page, String(areaId), String(province), String(city), String(district), String(street),
+    )
     markers = await pageMarkers(page)
     raisePageFailure(pageFailureCode(markers.title, markers.bodyText))
     try {

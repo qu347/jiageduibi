@@ -17,7 +17,7 @@ from app.automation.contracts import (
     RegionBatchGateway,
     VerifiedOffer,
 )
-from app.automation.regions import RegionTarget
+from app.automation.regions import RegionTarget, get_region_target
 from app.db.models.price_sheets import (
     PriceSheetBatch,
     PriceSheetItem,
@@ -184,6 +184,7 @@ class PriceSheetExecutor:
             task.error_summary = None
             region = RegionTarget(
                 task.region_code, task.province, task.city, task.district, task.street, task.sequence,
+                get_region_target(task.region_code).jd_area_id,
             )
             db.commit()
 
