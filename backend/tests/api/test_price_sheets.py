@@ -81,8 +81,21 @@ def test_recognize_edit_and_start_batch_without_persisting_image(tmp_path: Path)
     assert started.status_code == 200
     assert started.json()['batch']['status'] == 'queued'
     assert started.json()['batch']['selected_count'] == 2
-    assert len(started.json()['tasks']) == 62
-    assert started.json()['tasks'][0]['street'] == '奥运村街道'
+    assert started.json()['tasks'] == []
+    assert started.json()['checkout_progress'] == {
+        'stage': 'candidate_search',
+        'candidate_count': 0,
+        'task_total': 0,
+        'task_finished': 0,
+        'verified_count': 0,
+        'conditional_count': 0,
+        'address_required_count': 0,
+        'unavailable_count': 0,
+        'failed_count': 0,
+        'skipped_count': 0,
+        'cart_attention_required': False,
+        'current': None,
+    }
     assert client.app.state.test_price_sheet_coordinator.submitted == [batch_id]
 
 

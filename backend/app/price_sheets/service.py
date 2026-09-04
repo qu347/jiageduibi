@@ -2,21 +2,23 @@ from __future__ import annotations
 
 from datetime import UTC, date, datetime
 
-from sqlalchemy import and_, delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
-from app.automation.regions import MAINLAND_REGION_TARGETS
+from app.automation.regions import MAINLAND_REGION_TARGETS, get_region_target
 from app.db.models.price_sheets import (
     PriceSheetBatch,
+    PriceSheetCheckoutResult,
     PriceSheetCheckoutTask,
     PriceSheetItem,
-    PriceSheetRegionResult,
     PriceSheetRegionTask,
 )
 from app.price_sheets.contracts import ParsedPriceSheet
 from app.schemas.price_sheets import (
     PriceSheetBatchDetail,
     PriceSheetBatchView,
+    PriceSheetCheckoutCurrentView,
+    PriceSheetCheckoutProgressView,
     PriceSheetItemInput,
     PriceSheetItemView,
     PriceSheetRegionTaskView,
@@ -94,6 +96,98 @@ def get_batch_detail(db: Session, batch_id: int) -> PriceSheetBatchDetail:
         batch=PriceSheetBatchView.model_validate(batch, from_attributes=True),
         items=[PriceSheetItemView.model_validate(item, from_attributes=True) for item in items],
         tasks=[PriceSheetRegionTaskView.model_validate(task, from_attributes=True) for task in tasks],
+        checkout_progress=_checkout_progress(db, batch, items),
+    )
+
+
+def _checkout_progress(
+    db: Session,
+    batch: PriceSheetBatch,
+    items: list[PriceSheetItem],
+) -> PriceSheetCheckoutProgressView:
+    item_ids = [item.id for item in items]
+    candidate_count = sum(item.candidate_count for item in items if item.selected)
+    if not item_ids:
+        return PriceSheetCheckoutProgressView(
+            stage="review" if batch.status == "reviewing" else "candidate_search",
+            candidate_count=0,
+            task_total=0,
+            task_finished=0,
+            verified_count=0,
+            conditional_count=0,
+            address_required_count=0,
+            unavailable_count=0,
+            failed_count=0,
+            skipped_count=0,
+            cart_attention_required=False,
+        )
+
+    task_counts = dict(db.execute(
+        select(PriceSheetCheckoutTask.status, func.count(PriceSheetCheckoutTask.id))
+        .where(PriceSheetCheckoutTask.price_sheet_item_id.in_(item_ids))
+        .group_by(PriceSheetCheckoutTask.status)
+    ).all())
+    price_counts = dict(db.execute(
+        select(PriceSheetCheckoutResult.price_status, func.count(PriceSheetCheckoutResult.id))
+        .join(PriceSheetCheckoutTask, PriceSheetCheckoutTask.id == PriceSheetCheckoutResult.checkout_task_id)
+        .where(PriceSheetCheckoutTask.price_sheet_item_id.in_(item_ids))
+        .group_by(PriceSheetCheckoutResult.price_status)
+    ).all())
+    address_required_count = db.scalar(
+        select(func.count(PriceSheetCheckoutResult.id))
+        .join(PriceSheetCheckoutTask, PriceSheetCheckoutTask.id == PriceSheetCheckoutResult.checkout_task_id)
+        .where(
+            PriceSheetCheckoutTask.price_sheet_item_id.in_(item_ids),
+            PriceSheetCheckoutResult.unavailable_code == "checkout_address_required",
+        )
+    ) or 0
+    cart_attention_required = (db.scalar(
+        select(func.count(PriceSheetCheckoutTask.id)).where(
+            PriceSheetCheckoutTask.price_sheet_item_id.in_(item_ids),
+            PriceSheetCheckoutTask.error_code == "cart_isolation_failed",
+        )
+    ) or 0) > 0
+    current_task = db.scalar(
+        select(PriceSheetCheckoutTask)
+        .join(PriceSheetItem, PriceSheetItem.id == PriceSheetCheckoutTask.price_sheet_item_id)
+        .where(
+            PriceSheetCheckoutTask.price_sheet_item_id.in_(item_ids),
+            PriceSheetCheckoutTask.status == "running",
+        )
+        .order_by(PriceSheetItem.sequence, PriceSheetCheckoutTask.sequence)
+    )
+    current = None
+    if current_task is not None:
+        region = get_region_target(current_task.region_code)
+        current = PriceSheetCheckoutCurrentView(
+            platform_sku_id=current_task.platform_sku_id,
+            region_code=current_task.region_code,
+            address=_region_address(region.province, region.city, region.district, region.street),
+            entry_mode=current_task.entry_mode,
+        )
+    task_total = sum(task_counts.values())
+    finished = sum(task_counts.get(status, 0) for status in ("completed", "failed", "skipped"))
+    if task_total:
+        stage = "checkout_verification"
+    elif batch.status == "reviewing":
+        stage = "review"
+    elif batch.status in {"completed", "completed_partial", "failed", "stopped"}:
+        stage = "completed"
+    else:
+        stage = "candidate_search"
+    return PriceSheetCheckoutProgressView(
+        stage=stage,
+        candidate_count=candidate_count,
+        task_total=task_total,
+        task_finished=finished,
+        verified_count=price_counts.get("verified", 0),
+        conditional_count=price_counts.get("conditional", 0),
+        address_required_count=address_required_count,
+        unavailable_count=price_counts.get("unavailable", 0),
+        failed_count=task_counts.get("failed", 0),
+        skipped_count=task_counts.get("skipped", 0),
+        cart_attention_required=cart_attention_required,
+        current=current,
     )
 
 
@@ -300,26 +394,35 @@ def get_results(db: Session, batch_id: int) -> PriceSheetResultsView:
     not_lower: list[PriceSheetResultView] = []
     partial: list[PriceSheetResultView] = []
     for item in items:
-        row = db.execute(
-            select(PriceSheetRegionResult, PriceSheetRegionTask)
-            .join(PriceSheetRegionTask, and_(
-                PriceSheetRegionTask.price_sheet_item_id == PriceSheetRegionResult.price_sheet_item_id,
-                PriceSheetRegionTask.region_code == PriceSheetRegionResult.region_code,
-            ))
-            .where(PriceSheetRegionResult.price_sheet_item_id == item.id)
-            .order_by(
-                PriceSheetRegionResult.trusted_price_cents,
-                PriceSheetRegionTask.sequence,
-                PriceSheetRegionResult.platform_sku_id,
+        rows = db.execute(
+            select(PriceSheetCheckoutResult, PriceSheetCheckoutTask)
+            .join(PriceSheetCheckoutTask, PriceSheetCheckoutTask.id == PriceSheetCheckoutResult.checkout_task_id)
+            .where(
+                PriceSheetCheckoutTask.price_sheet_item_id == item.id,
+                PriceSheetCheckoutResult.price_status == "verified",
+                PriceSheetCheckoutResult.payable_price_cents.is_not(None),
             )
-        ).first()
-        complete = item.completed_region_count == item.total_region_count == 31 and item.failed_region_count == 0
-        if not complete:
-            partial.append(_result_view(item, row, "partial"))
-        elif row is None or row[0].trusted_price_cents >= item.today_price_cents:
-            not_lower.append(_result_view(item, row, "no_comparable" if row is None else "not_lower"))
+            .order_by(
+                PriceSheetCheckoutResult.payable_price_cents,
+                (PriceSheetCheckoutTask.sequence - 1) % len(MAINLAND_REGION_TARGETS),
+                PriceSheetCheckoutTask.sequence,
+                PriceSheetCheckoutTask.platform_sku_id,
+            )
+        ).all()
+        row = rows[0] if rows else None
+        coverage_count = len({task.region_code for _result, task in rows})
+        failed_count = db.scalar(select(func.count(PriceSheetCheckoutTask.id)).where(
+            PriceSheetCheckoutTask.price_sheet_item_id == item.id,
+            PriceSheetCheckoutTask.status == "failed",
+        )) or 0
+        if item.candidate_count == 0 and item.status == "completed":
+            not_lower.append(_result_view(item, None, "no_comparable", 0, failed_count))
+        elif coverage_count != len(MAINLAND_REGION_TARGETS):
+            partial.append(_result_view(item, row, "partial", coverage_count, failed_count))
+        elif row is None or row[0].payable_price_cents >= item.today_price_cents:
+            not_lower.append(_result_view(item, row, "not_lower", coverage_count, failed_count))
         else:
-            lower.append(_result_view(item, row, "lower"))
+            lower.append(_result_view(item, row, "lower", coverage_count, failed_count))
     return PriceSheetResultsView(
         lower_results=lower,
         not_lower_items=not_lower,
@@ -327,7 +430,13 @@ def get_results(db: Session, batch_id: int) -> PriceSheetResultsView:
     )
 
 
-def _result_view(item: PriceSheetItem, row, status: str) -> PriceSheetResultView:
+def _result_view(
+    item: PriceSheetItem,
+    row,
+    status: str,
+    coverage_count: int,
+    failed_count: int,
+) -> PriceSheetResultView:
     base = {
         "item_id": item.id,
         "model_name": item.model_name,
@@ -335,33 +444,42 @@ def _result_view(item: PriceSheetItem, row, status: str) -> PriceSheetResultView
         "color": item.color,
         "today_price_cents": item.today_price_cents,
         "status": status,
-        "coverage": f"{item.completed_region_count}/{item.total_region_count or 31}",
+        "coverage": f"{coverage_count}/{len(MAINLAND_REGION_TARGETS)}",
+        "failed_count": failed_count,
     }
     if row is None:
         return PriceSheetResultView(**base)
     result, task = row
+    region = get_region_target(task.region_code)
     return PriceSheetResultView(
         **base,
-        region_code=result.region_code,
-        address=_task_address(task),
-        platform_sku_id=result.platform_sku_id,
+        region_code=task.region_code,
+        address=_region_address(region.province, region.city, region.district, region.street),
+        platform_sku_id=task.platform_sku_id,
         title=result.title,
         product_url=result.product_url,
         shop_name=result.shop_name,
-        sale_price_cents=result.sale_price_cents,
-        platform_coupon_cents=result.platform_coupon_cents + result.merchant_discount_cents,
+        entry_mode=task.entry_mode,
+        price_status=result.price_status,
+        quantity=result.quantity,
+        target_only=result.target_only,
+        line_original_price_cents=result.line_original_price_cents,
+        line_sale_price_cents=result.line_sale_price_cents,
+        merchant_discount_cents=result.merchant_discount_cents,
+        ordinary_coupon_cents=result.ordinary_coupon_cents,
         subsidy_amount_cents=result.subsidy_amount_cents,
         shipping_fee_cents=result.shipping_fee_cents,
-        trusted_price_cents=result.trusted_price_cents,
-        sale_price_includes_coupon=result.sale_price_includes_coupon,
-        sale_price_includes_subsidy=result.sale_price_includes_subsidy,
+        payable_price_cents=result.payable_price_cents,
+        discount_summary=result.discount_summary,
+        conditional_reason=result.conditional_reason,
+        cart_restored=result.cart_restored,
         captured_at=result.captured_at,
     )
 
 
-def _task_address(task: PriceSheetRegionTask) -> str:
+def _region_address(province: str, city: str, district: str, street: str) -> str:
     parts: list[str] = []
-    for part in (task.province, task.city, task.district, task.street):
+    for part in (province, city, district, street):
         if not parts or part != parts[-1]:
             parts.append(part)
     return " / ".join(parts)

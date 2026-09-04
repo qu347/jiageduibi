@@ -86,10 +86,33 @@ class PriceSheetRegionTaskView(BaseModel):
     finished_at: datetime | None
 
 
+class PriceSheetCheckoutCurrentView(BaseModel):
+    platform_sku_id: str
+    region_code: str
+    address: str
+    entry_mode: str | None
+
+
+class PriceSheetCheckoutProgressView(BaseModel):
+    stage: str
+    candidate_count: int
+    task_total: int
+    task_finished: int
+    verified_count: int
+    conditional_count: int
+    address_required_count: int
+    unavailable_count: int
+    failed_count: int
+    skipped_count: int
+    cart_attention_required: bool
+    current: PriceSheetCheckoutCurrentView | None = None
+
+
 class PriceSheetBatchDetail(BaseModel):
     batch: PriceSheetBatchView
     items: list[PriceSheetItemView]
     tasks: list[PriceSheetRegionTaskView] = Field(default_factory=list)
+    checkout_progress: PriceSheetCheckoutProgressView
 
 
 class PriceSheetResultView(BaseModel):
@@ -106,13 +129,21 @@ class PriceSheetResultView(BaseModel):
     title: str | None = None
     product_url: str | None = None
     shop_name: str | None = None
-    sale_price_cents: int | None = None
-    platform_coupon_cents: int | None = None
+    entry_mode: str | None = None
+    price_status: str | None = None
+    quantity: int | None = None
+    target_only: bool | None = None
+    line_original_price_cents: int | None = None
+    line_sale_price_cents: int | None = None
+    merchant_discount_cents: int | None = None
+    ordinary_coupon_cents: int | None = None
     subsidy_amount_cents: int | None = None
     shipping_fee_cents: int | None = None
-    trusted_price_cents: int | None = None
-    sale_price_includes_coupon: bool | None = None
-    sale_price_includes_subsidy: bool | None = None
+    payable_price_cents: int | None = None
+    discount_summary: str | None = None
+    conditional_reason: str | None = None
+    cart_restored: bool | None = None
+    failed_count: int = 0
     captured_at: datetime | None = None
 
 

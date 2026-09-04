@@ -124,7 +124,7 @@ def post_stop_price_sheet(batch_id: int, db: Session = Depends(get_db)) -> Price
 
 @router.post("/{batch_id}/retry-failed", response_model=PriceSheetBatchDetail)
 def post_retry_price_sheet(batch_id: int, request: Request, db: Session = Depends(get_db)) -> PriceSheetBatchDetail:
-    detail = _call(db, lambda: retry_failed(db, batch_id), "重试失败地区失败")
+    detail = _call(db, lambda: retry_failed(db, batch_id), "重试失败核价任务失败")
     _submit_if_available(request, batch_id)
     return detail
 
