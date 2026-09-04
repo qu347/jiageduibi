@@ -1,46 +1,35 @@
-import { cents } from './jd-page.js'
-
-
-const FORBIDDEN_ACTION = /提交订单|确认订单|去支付|立即支付|付款/
-const ACTION_LABELS = {
-  buy_now: /^立即购买$/,
-  add_cart: /^(加入购物车|加入采购车)$/,
-  go_checkout: /^去结算$/,
-}
-const CONDITIONAL_LABELS = [
-  [/PLUS|会员/, 'PLUS会员'],
-  [/新人/, '新人优惠'],
-  [/学生/, '学生优惠'],
-  [/白条/, '白条优惠'],
-  [/指定支付|银行卡|支付优惠/, '指定支付优惠'],
-  [/分期|月供/, '分期优惠'],
-  [/以旧换新|回收/, '以旧换新'],
-]
-
-
 function normalizedText(value) {
   return String(value ?? '').replace(/\s+/g, ' ').trim()
 }
 
 
-function selectorFor(element, kind) {
+export function actionSelector(kind, root = document) {
+  const patterns = {
+    buy_now: /^立即购买$/,
+    add_cart: /^(加入购物车|加入采购车)$/,
+    go_checkout: /^去结算$/,
+  }
+  const pattern = patterns[kind]
+  if (!pattern) return null
+  const candidates = Array.from(root.querySelectorAll('button, a, input[type="button"], input[type="submit"]'))
+  const matches = candidates.filter((element) => {
+    const label = String(element.textContent || element.value || element.getAttribute('aria-label') || '').replace(/\s+/g, ' ').trim()
+    const href = String(element.getAttribute('href') || '')
+    let unsafeHref = false
+    try {
+      const parsed = new URL(href)
+      unsafeHref = /(?:^|\.)(?:cashier|pay)\.jd\.com$/.test(parsed.hostname)
+    } catch {
+      unsafeHref = false
+    }
+    return !/提交订单|确认订单|去支付|立即支付|付款/.test(label) && !unsafeHref && pattern.test(label)
+  })
+  if (matches.length !== 1) return null
+  const element = matches[0]
   if (element.id) return `#${element.id}`
   const marker = `opencli-${kind}`
   element.setAttribute('data-opencli-action', marker)
   return `[data-opencli-action="${marker}"]`
-}
-
-
-export function actionSelector(kind, root = document) {
-  const pattern = ACTION_LABELS[kind]
-  if (!pattern) return null
-  const candidates = Array.from(root.querySelectorAll('button, a, input[type="button"], input[type="submit"]'))
-  const matches = candidates.filter((element) => {
-    const label = normalizedText(element.textContent || element.value || element.getAttribute('aria-label'))
-    const href = String(element.getAttribute('href') || '')
-    return !FORBIDDEN_ACTION.test(label) && !safetyBoundaryCode({ url: href, title: '', bodyText: '' }) && pattern.test(label)
-  })
-  return matches.length === 1 ? selectorFor(matches[0], kind) : null
 }
 
 
@@ -67,45 +56,55 @@ function safeHost(value) {
 }
 
 
-function price(root, name) {
-  return cents(normalizedText(root.querySelector(`[data-opencli-price="${name}"]`)?.textContent))
-}
-
-
-function unavailable(base, code) {
-  return {
-    ...base,
-    priceStatus: 'unavailable',
-    unavailableCode: code,
-  }
-}
-
-
 export function extractCheckoutPreview(expected, root = document) {
-  const bodyText = normalizedText(
+  const normalize = (value) => String(value ?? '').replace(/\s+/g, ' ').trim()
+  const parseMoney = (value) => {
+    const normalized = normalize(value)
+    if (!normalized || /月供|分期|定金|预售|起步|起价/.test(normalized)) return null
+    const match = normalized.match(/(?:￥|¥)?\s*(\d[\d,]*)(?:\.(\d{1,2}))?/)
+    if (!match) return null
+    const yuan = Number(match[1].replaceAll(',', ''))
+    const fen = Number((match[2] ?? '').padEnd(2, '0') || 0)
+    if (!Number.isSafeInteger(yuan) || !Number.isSafeInteger(fen)) return null
+    const result = yuan * 100 + fen
+    return result > 0 ? result : null
+  }
+  const readPrice = (view, name) => parseMoney(
+    view.querySelector(`[data-opencli-price="${name}"]`)?.textContent,
+  )
+  const bodyText = normalize(
     root.body?.textContent || root.documentElement?.textContent || root.textContent,
   ).slice(0, 20000)
-  const addressText = normalizedText(root.querySelector('[data-opencli-checkout-address]')?.textContent)
+  const addressText = normalize(root.querySelector('[data-opencli-checkout-address]')?.textContent)
   const lines = Array.from(root.querySelectorAll('[data-opencli-checkout-line]'))
   const targetLines = lines.filter((line) => String(line.getAttribute('data-sku') || '') === String(expected.sku))
   const line = targetLines[0] ?? null
   const quantity = Number(line?.getAttribute('data-quantity') || 0)
   const targetOnly = lines.length === 1 && targetLines.length === 1
   const regionConfirmed = addressText.includes(String(expected.district)) && addressText.includes(String(expected.street))
-  const summary = normalizedText(root.querySelector('[data-opencli-discount-summary]')?.textContent).slice(0, 2000)
-  const conditionalReason = CONDITIONAL_LABELS.find(([pattern]) => pattern.test(summary || bodyText))?.[1] ?? null
+  const summary = normalize(root.querySelector('[data-opencli-discount-summary]')?.textContent).slice(0, 2000)
+  const conditionalLabels = [
+    [/PLUS|会员/, 'PLUS会员'],
+    [/新人/, '新人优惠'],
+    [/学生/, '学生优惠'],
+    [/白条/, '白条优惠'],
+    [/指定支付|银行卡|支付优惠/, '指定支付优惠'],
+    [/分期|月供/, '分期优惠'],
+    [/以旧换新|回收/, '以旧换新'],
+  ]
+  const conditionalReason = conditionalLabels.find(([pattern]) => pattern.test(summary || bodyText))?.[1] ?? null
   const base = {
-    title: normalizedText(line?.querySelector('[data-opencli-title]')?.textContent),
-    shopName: normalizedText(line?.querySelector('[data-opencli-shop]')?.textContent),
+    title: normalize(line?.querySelector('[data-opencli-title]')?.textContent),
+    shopName: normalize(line?.querySelector('[data-opencli-shop]')?.textContent),
     quantity,
     targetOnly,
-    lineOriginalPriceCents: price(line || root, 'original'),
-    lineSalePriceCents: price(line || root, 'sale'),
-    merchantDiscountCents: price(root, 'merchant') ?? 0,
-    ordinaryCouponCents: price(root, 'coupon') ?? 0,
-    subsidyAmountCents: price(root, 'subsidy') ?? 0,
-    shippingFeeCents: price(root, 'shipping') ?? 0,
-    payablePriceCents: price(root, 'payable'),
+    lineOriginalPriceCents: readPrice(line || root, 'original'),
+    lineSalePriceCents: readPrice(line || root, 'sale'),
+    merchantDiscountCents: readPrice(root, 'merchant') ?? 0,
+    ordinaryCouponCents: readPrice(root, 'coupon') ?? 0,
+    subsidyAmountCents: readPrice(root, 'subsidy') ?? 0,
+    shippingFeeCents: readPrice(root, 'shipping') ?? 0,
+    payablePriceCents: readPrice(root, 'payable'),
     discountSummary: summary,
     conditionalReason,
     unavailableCode: null,
@@ -114,21 +113,25 @@ export function extractCheckoutPreview(expected, root = document) {
   }
 
   if (/请选择收货地址|新增收货地址|请填写收货地址/.test(bodyText)) {
-    return unavailable(base, 'checkout_address_required')
+    return { ...base, priceStatus: 'unavailable', unavailableCode: 'checkout_address_required' }
   }
-  if (!regionConfirmed) return unavailable(base, 'checkout_region_unconfirmed')
-  if (!targetOnly || quantity !== 1) return unavailable(base, 'sku_unconfirmed')
-  if (base.payablePriceCents === null) return unavailable(base, 'price_unavailable')
+  if (!regionConfirmed) return { ...base, priceStatus: 'unavailable', unavailableCode: 'checkout_region_unconfirmed' }
+  if (!targetOnly || quantity !== 1) return { ...base, priceStatus: 'unavailable', unavailableCode: 'sku_unconfirmed' }
+  if (base.payablePriceCents === null) return { ...base, priceStatus: 'unavailable', unavailableCode: 'price_unavailable' }
   return base
 }
 
 
-export function snapshotCart(root = document) {
+export function snapshotCart(input, evaluatedRoot) {
+  const root = evaluatedRoot || (input?.querySelectorAll ? input : document)
   return {
     rows: Array.from(root.querySelectorAll('[data-opencli-cart-line]')).map((line) => ({
       sku: String(line.getAttribute('data-sku') || ''),
       quantity: Number(line.getAttribute('data-quantity') || 0),
-      selected: Boolean(line.querySelector('input[type="checkbox"]')?.checked),
+      selected: (() => {
+        const checkbox = line.querySelector('input[type="checkbox"]')
+        return typeof checkbox?.checked === 'boolean' ? checkbox.checked : Boolean(checkbox?.hasAttribute('checked'))
+      })(),
     })).filter((row) => row.sku).sort((left, right) => left.sku.localeCompare(right.sku)),
   }
 }
@@ -145,4 +148,77 @@ export function planCartIsolation(snapshot, sku) {
 export function cartRestored(before, current, addedSku) {
   if (current?.rows?.some((row) => row.sku === String(addedSku))) return false
   return JSON.stringify(before?.rows ?? []) === JSON.stringify(current?.rows ?? [])
+}
+
+
+export function cartSelectionSelectors(sku, root = document) {
+  const lines = Array.from(root.querySelectorAll(
+    '[data-opencli-cart-line], .item-item[data-sku], [class*="cart-item"][data-sku]',
+  ))
+  const targets = lines.filter((line) => String(line.getAttribute('data-sku') || '') === String(sku))
+  if (targets.length !== 1 || Number(targets[0].getAttribute('data-quantity') || targets[0].querySelector('input.itxt, [class*="quantity"] input')?.value || 0) !== 1) {
+    return { valid: false, selectors: [] }
+  }
+  const selectors = []
+  for (const line of lines) {
+    const checkbox = line.querySelector('input[type="checkbox"]')
+    if (!checkbox) return { valid: false, selectors: [] }
+    const shouldSelect = line === targets[0]
+    const selected = typeof checkbox.checked === 'boolean' ? checkbox.checked : checkbox.hasAttribute('checked')
+    if (selected === shouldSelect) continue
+    if (checkbox.id) selectors.push(`#${checkbox.id}`)
+    else {
+      const marker = `isolate-${line.getAttribute('data-sku')}`
+      checkbox.setAttribute('data-opencli-cart-toggle', marker)
+      selectors.push(`[data-opencli-cart-toggle="${marker}"]`)
+    }
+  }
+  return { valid: true, selectors }
+}
+
+
+export function cartDeleteSelector(sku, root = document) {
+  const lines = Array.from(root.querySelectorAll(
+    '[data-opencli-cart-line], .item-item[data-sku], [class*="cart-item"][data-sku]',
+  )).filter((line) => String(line.getAttribute('data-sku') || '') === String(sku))
+  if (lines.length !== 1) return null
+  const actions = Array.from(lines[0].querySelectorAll(
+    '[data-opencli-remove], .cart-remove, .p-ops a, button, a',
+  )).filter((element) => /删除|移除/.test(String(element.textContent || element.getAttribute('aria-label') || '')))
+  if (actions.length !== 1) return null
+  const element = actions[0]
+  if (element.id) return `#${element.id}`
+  element.setAttribute('data-opencli-cart-remove', String(sku))
+  return `[data-opencli-cart-remove="${sku}"]`
+}
+
+
+export function cartRestoreSelectors(input, root = document) {
+  const before = input?.before?.rows ?? []
+  const addedSku = String(input?.addedSku ?? '')
+  const lines = Array.from(root.querySelectorAll(
+    '[data-opencli-cart-line], .item-item[data-sku], [class*="cart-item"][data-sku]',
+  ))
+  if (lines.some((line) => String(line.getAttribute('data-sku') || '') === addedSku)) {
+    return { valid: false, selectors: [] }
+  }
+  if (lines.length !== before.length) return { valid: false, selectors: [] }
+  const selectors = []
+  for (const original of before) {
+    const matches = lines.filter((line) => String(line.getAttribute('data-sku') || '') === original.sku)
+    if (matches.length !== 1) return { valid: false, selectors: [] }
+    const line = matches[0]
+    const quantity = Number(line.getAttribute('data-quantity') || line.querySelector('input.itxt, [class*="quantity"] input')?.value || 0)
+    const checkbox = line.querySelector('input[type="checkbox"]')
+    if (quantity !== original.quantity || !checkbox) return { valid: false, selectors: [] }
+    const selected = typeof checkbox.checked === 'boolean' ? checkbox.checked : checkbox.hasAttribute('checked')
+    if (selected === original.selected) continue
+    if (checkbox.id) selectors.push(`#${checkbox.id}`)
+    else {
+      const marker = `restore-${original.sku}`
+      checkbox.setAttribute('data-opencli-cart-toggle', marker)
+      selectors.push(`[data-opencli-cart-toggle="${marker}"]`)
+    }
+  }
+  return { valid: true, selectors }
 }

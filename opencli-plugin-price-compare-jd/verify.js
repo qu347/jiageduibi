@@ -126,7 +126,7 @@ async function regionCookieWasApplied(page, district, street) {
 }
 
 
-async function chooseRegion(page, areaId, province, city, district, street) {
+export async function chooseRegion(page, areaId, province, city, district, street) {
   if (!jdRegionCookieAssignment(areaId)) {
     throw new CommandExecutionError('UNSUPPORTED_REGION: 京东地区编码格式无效')
   }

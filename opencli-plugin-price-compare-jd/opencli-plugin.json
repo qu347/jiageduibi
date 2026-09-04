@@ -2,5 +2,5 @@
   "name": "price-compare-jd",
   "version": "0.1.0",
   "opencli": ">=1.8.0",
-  "description": "Read-only JD candidate search and representative-region verification"
+  "description": "JD candidate search, representative-region verification, and guarded checkout preview"
 }
