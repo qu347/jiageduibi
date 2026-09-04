@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from dataclasses import replace
 from datetime import date, datetime
 
 from app.price_sheets.contracts import OcrLine, ParsedPriceSheet, ParsedPriceSheetItem
@@ -113,9 +114,23 @@ def parse_price_sheet(lines: list[OcrLine], uploaded_at: datetime) -> ParsedPric
         if valid_count == 0:
             unparsed.append(raw_text)
 
+    deduplicated: dict[tuple[str, str, str, str], ParsedPriceSheetItem] = {}
+    for item in items:
+        identity = (item.brand, item.model_name, item.storage, item.color)
+        current = deduplicated.get(identity)
+        if current is None:
+            deduplicated[identity] = item
+            continue
+        deduplicated[identity] = replace(
+            current,
+            today_price_cents=min(current.today_price_cents, item.today_price_cents),
+            confidence=min(current.confidence, item.confidence),
+            review_required=True,
+        )
+
     return ParsedPriceSheet(
         price_date=price_date,
         date_inferred=date_inferred,
-        items=items,
+        items=list(deduplicated.values()),
         unparsed_lines=unparsed,
     )

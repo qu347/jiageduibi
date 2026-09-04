@@ -80,3 +80,17 @@ def test_keeps_unparsed_or_invalid_rows_without_inventing_items() -> None:
         '17Pro256 橙999',
         '无法识别的文字',
     ]
+
+
+def test_duplicate_exact_color_is_collapsed_to_one_review_row() -> None:
+    parsed = parse_price_sheet([
+        line('17-256G 紫5900紫5900蓝6000蓝5800', 0),
+    ], datetime(2026, 9, 4, 8, 0))
+
+    assert [
+        (item.color, item.today_price_cents, item.review_required)
+        for item in parsed.items
+    ] == [
+        ('紫色', 590_000, True),
+        ('蓝色', 580_000, True),
+    ]

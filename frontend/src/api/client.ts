@@ -15,13 +15,17 @@ export class ApiError extends Error {
   }
 
   static async fromResponse(response: Response): Promise<ApiError> {
-    let detail: unknown = null
+    const body = await response.text()
+    let detail: unknown = body
     try {
-      detail = await response.json()
+      detail = body ? JSON.parse(body) : null
     } catch {
-      detail = await response.text()
+      // Keep a non-JSON server response as plain text.
     }
-    return new ApiError(`请求失败（${response.status}）`, response.status, detail)
+    const message = typeof detail === 'string' && detail.trim()
+      ? detail
+      : `请求失败（${response.status}）`
+    return new ApiError(message, response.status, detail)
   }
 }
 

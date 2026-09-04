@@ -38,7 +38,7 @@ describe('price sheet comparison', () => {
 
     expect(wrapper.text()).toContain('核对识别结果')
     expect(wrapper.text()).toContain('黑色')
-    expect(wrapper.text()).toContain('低置信度')
+    expect(wrapper.text()).toContain('请核对 · 识别置信度 72%')
     await wrapper.get('[data-testid="start-price-sheet"]').trigger('click')
 
     expect(save).toHaveBeenCalledOnce()

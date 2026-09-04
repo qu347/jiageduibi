@@ -114,7 +114,7 @@ async function saveAndStart() {
           <div class="price-sheet-row-title">
             <label><input v-model="item.selected" type="checkbox"> 查询</label>
             <strong>{{ item.model_name }} · {{ item.storage }} · {{ item.color }}</strong>
-            <span v-if="item.review_required" class="review-badge warning">低置信度 {{ Math.round(item.confidence * 100) }}%</span>
+            <span v-if="item.review_required" class="review-badge warning">请核对 · 识别置信度 {{ Math.round(item.confidence * 100) }}%</span>
           </div>
           <div class="price-sheet-fields">
             <label>机型<input v-model="item.model_name"></label>
