@@ -9,7 +9,7 @@ const batch = {
   file_name: 'sheet.png',
   price_date: '2026-09-03',
   date_inferred: false,
-  status: 'reviewing',
+  status: 'reviewing' as const,
   recognized_count: 1,
   selected_count: 1,
   completed_item_count: 0,
@@ -36,6 +36,13 @@ const item = {
   started_at: null, finished_at: null,
 }
 
+const progress = {
+  stage: 'review', candidate_count: 0, task_total: 0, task_finished: 0,
+  verified_count: 0, conditional_count: 0, address_required_count: 0,
+  unavailable_count: 0, failed_count: 0, skipped_count: 0,
+  cart_attention_required: false, current: null,
+}
+
 
 describe('price sheet store', () => {
   beforeEach(() => {
@@ -52,7 +59,7 @@ describe('price sheet store', () => {
   })
 
   it('uploads raw image bytes and persists the returned batch identity', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ batch, items: [item], tasks: [] }), {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ batch, items: [item], tasks: [], checkout_progress: progress }), {
       status: 201, headers: { 'Content-Type': 'application/json' },
     }))
     vi.stubGlobal('fetch', fetchMock)
@@ -71,5 +78,17 @@ describe('price sheet store', () => {
     }))
     expect(localStorage.getItem('lastPriceSheetBatchId')).toBe('12')
     expect(store.detail?.items[0].color).toBe('黑色')
+  })
+
+  it('keeps cart attention visible across later refreshes until reset', () => {
+    const store = usePriceSheetStore()
+    const attention = { ...progress, cart_attention_required: true }
+
+    store.remember({ batch, items: [item], tasks: [], checkout_progress: attention })
+    store.remember({ batch, items: [item], tasks: [], checkout_progress: progress })
+
+    expect(store.cartAttentionSeen).toBe(true)
+    store.reset()
+    expect(store.cartAttentionSeen).toBe(false)
   })
 })

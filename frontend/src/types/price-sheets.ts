@@ -71,10 +71,33 @@ export interface PriceSheetRegionTaskView {
   finished_at: string | null
 }
 
+export interface PriceSheetCheckoutCurrentView {
+  platform_sku_id: string
+  region_code: string
+  address: string
+  entry_mode: string | null
+}
+
+export interface PriceSheetCheckoutProgressView {
+  stage: string
+  candidate_count: number
+  task_total: number
+  task_finished: number
+  verified_count: number
+  conditional_count: number
+  address_required_count: number
+  unavailable_count: number
+  failed_count: number
+  skipped_count: number
+  cart_attention_required: boolean
+  current: PriceSheetCheckoutCurrentView | null
+}
+
 export interface PriceSheetBatchDetail {
   batch: PriceSheetBatchView
   items: PriceSheetItemView[]
   tasks: PriceSheetRegionTaskView[]
+  checkout_progress: PriceSheetCheckoutProgressView
 }
 
 export interface PriceSheetResultView {
@@ -91,13 +114,21 @@ export interface PriceSheetResultView {
   title: string | null
   product_url: string | null
   shop_name: string | null
-  sale_price_cents: number | null
-  platform_coupon_cents: number | null
+  entry_mode: string | null
+  price_status: string | null
+  quantity: number | null
+  target_only: boolean | null
+  line_original_price_cents: number | null
+  line_sale_price_cents: number | null
+  merchant_discount_cents: number | null
+  ordinary_coupon_cents: number | null
   subsidy_amount_cents: number | null
   shipping_fee_cents: number | null
-  trusted_price_cents: number | null
-  sale_price_includes_coupon: boolean | null
-  sale_price_includes_subsidy: boolean | null
+  payable_price_cents: number | null
+  discount_summary: string | null
+  conditional_reason: string | null
+  cart_restored: boolean | null
+  failed_count: number
   captured_at: string | null
 }
 

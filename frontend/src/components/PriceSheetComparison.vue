@@ -6,7 +6,7 @@ import { usePriceSheetStore, validatePriceSheetFile } from '../stores/price-shee
 import type { PriceSheetItemView } from '../types/price-sheets'
 
 const store = usePriceSheetStore()
-const { detail, results, loading, error } = storeToRefs(store)
+const { detail, results, loading, error, cartAttentionSeen } = storeToRefs(store)
 const uploadError = ref('')
 const resultTab = ref<'lower' | 'other'>('lower')
 
@@ -18,18 +18,26 @@ const isReviewing = computed(() => detail.value?.batch.status === 'reviewing')
 const isFinished = computed(() => Boolean(detail.value && ['completed', 'completed_partial', 'stopped', 'failed'].includes(detail.value.batch.status)))
 const isProgress = computed(() => Boolean(detail.value && !isReviewing.value && !isFinished.value))
 const currentItem = computed(() => detail.value?.items.find((item) => item.id === detail.value?.batch.current_item_id) ?? null)
-const currentTask = computed(() => {
-  if (!currentItem.value) return null
-  return detail.value?.tasks.find((task) => task.price_sheet_item_id === currentItem.value?.id && ['running', 'waiting_user'].includes(task.status)) ?? null
-})
+const checkoutProgress = computed(() => detail.value?.checkout_progress ?? null)
 const otherResults = computed(() => [
   ...(results.value?.not_lower_items ?? []),
   ...(results.value?.partial_items ?? []),
 ])
 
 function money(cents: number | null): string {
-  if (cents === null) return '—'
+  if (cents === null || !Number.isFinite(cents)) return '—'
   return new Intl.NumberFormat('zh-CN', { style: 'currency', currency: 'CNY', maximumFractionDigits: 0 }).format(cents / 100)
+}
+
+function entryMode(value: string | null): string {
+  if (value === 'buy_now') return '立即购买'
+  if (value === 'cart_fallback') return '购物车回退'
+  return '准备中'
+}
+
+function capturedAt(value: string | null): string {
+  if (!value) return '—'
+  return new Intl.DateTimeFormat('zh-CN', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value))
 }
 
 async function selectFile(event: Event) {
@@ -134,19 +142,38 @@ async function saveAndStart() {
     </div>
 
     <div v-else-if="isProgress" class="price-sheet-progress">
+      <div class="checkout-stage-heading">
+        <div><span class="eyebrow">冻结候选后逐组合串行核验</span><h3>结算页核价</h3></div>
+        <strong>候选 {{ checkoutProgress?.candidate_count ?? 0 }}/20</strong>
+        <strong>组合进度 {{ checkoutProgress?.task_finished ?? 0 }}/{{ checkoutProgress?.task_total ?? 0 }}</strong>
+      </div>
       <div class="progress-summary">
         <div><span>批次状态</span><strong>{{ statusLabels[detail.batch.status] }}</strong></div>
         <div><span>商品进度</span><strong>{{ detail.batch.completed_item_count }}/{{ detail.batch.selected_count }}</strong></div>
         <div><span>当前规格</span><strong>{{ currentItem ? `${currentItem.model_name} ${currentItem.storage} ${currentItem.color}` : '等待调度' }}</strong></div>
         <div><span>地区进度</span><strong>{{ currentItem?.completed_region_count ?? 0 }}/31</strong></div>
       </div>
-      <p v-if="currentTask">当前地址：{{ [currentTask.province, currentTask.city, currentTask.district, currentTask.street].filter((part, index, all) => index === 0 || part !== all[index - 1]).join(' / ') }}</p>
+      <div v-if="checkoutProgress?.current" class="checkout-current">
+        <span>当前 SKU {{ checkoutProgress.current.platform_sku_id }}</span>
+        <span>{{ checkoutProgress.current.address }}</span>
+        <span>{{ entryMode(checkoutProgress.current.entry_mode) }}</span>
+      </div>
+      <div class="checkout-counts" aria-label="结算核价分类统计">
+        <span>已核验 {{ checkoutProgress?.verified_count ?? 0 }}</span>
+        <span>条件价 {{ checkoutProgress?.conditional_count ?? 0 }}</span>
+        <span>需真实地址 {{ checkoutProgress?.address_required_count ?? 0 }}</span>
+        <span>不可用 {{ checkoutProgress?.unavailable_count ?? 0 }}</span>
+        <span>失败 {{ checkoutProgress?.failed_count ?? 0 }}</span>
+        <span>跳过 {{ checkoutProgress?.skipped_count ?? 0 }}</span>
+      </div>
+      <p class="checkout-safety">程序只读取结算预览，不会提交订单或付款。</p>
+      <p v-if="cartAttentionSeen" class="automation-warning">购物车可能未完全恢复，请人工检查</p>
       <p v-if="detail.batch.last_error_summary" class="automation-warning">{{ detail.batch.last_error_summary }}</p>
       <div class="automatic-actions">
         <button v-if="detail.batch.status === 'running' || detail.batch.status === 'queued'" type="button" @click="store.control('pause')">暂停</button>
         <button v-if="detail.batch.status === 'paused' || detail.batch.status === 'waiting_user'" type="button" @click="store.control('resume')">继续</button>
         <button type="button" @click="store.control('stop')">停止</button>
-        <button v-if="detail.batch.failed_item_count" type="button" @click="store.control('retry-failed')">重试失败地区</button>
+        <button v-if="(checkoutProgress?.failed_count ?? 0) > 0" type="button" @click="store.control('retry-failed')">重试失败组合</button>
       </div>
     </div>
 
@@ -158,13 +185,16 @@ async function saveAndStart() {
       <div v-if="resultTab === 'lower'" class="price-sheet-result-list">
         <article v-for="result in results?.lower_results" :key="result.item_id" data-testid="price-sheet-low-result" class="price-sheet-result-card">
           <div><span>全国最低</span><h3>{{ result.model_name }} · {{ result.storage }} · {{ result.color }}</h3><p>{{ result.address }} · {{ result.coverage }}</p></div>
-          <div class="result-prices"><small>今日价 {{ money(result.today_price_cents) }}</small><strong>{{ money(result.trusted_price_cents) }}</strong><span>节省 {{ money(result.today_price_cents - (result.trusted_price_cents ?? result.today_price_cents)) }}</span></div>
+          <div class="result-prices"><small>今日价 {{ money(result.today_price_cents) }}</small><strong>{{ money(result.payable_price_cents) }}</strong><span>节省 {{ money(result.today_price_cents - (result.payable_price_cents ?? result.today_price_cents)) }}</span></div>
           <dl>
-            <div><dt>页面价</dt><dd>{{ money(result.sale_price_cents) }}</dd></div>
-            <div><dt>普通优惠券</dt><dd>-{{ money(result.platform_coupon_cents) }}</dd></div>
-            <div><dt>确认国补</dt><dd>-{{ money(result.subsidy_amount_cents) }}</dd></div>
+            <div><dt>页面销售价</dt><dd>{{ money(result.line_sale_price_cents) }}</dd></div>
+            <div><dt>商家优惠</dt><dd>-{{ money(result.merchant_discount_cents) }}</dd></div>
+            <div><dt>普通优惠券</dt><dd>-{{ money(result.ordinary_coupon_cents) }}</dd></div>
+            <div><dt>已确认国补</dt><dd>-{{ money(result.subsidy_amount_cents) }}</dd></div>
             <div><dt>运费</dt><dd>+{{ money(result.shipping_fee_cents) }}</dd></div>
+            <div><dt>结算应付</dt><dd>{{ money(result.payable_price_cents) }}</dd></div>
           </dl>
+          <p class="checkout-result-meta">{{ entryMode(result.entry_mode) }} · 核验于 {{ capturedAt(result.captured_at) }}<span v-if="result.failed_count"> · {{ result.failed_count }} 个组合失败</span></p>
           <a v-if="result.product_url" :href="result.product_url" target="_blank" rel="noopener">在京东查看 · {{ result.shop_name }}</a>
         </article>
         <p v-if="!results?.lower_results.length" class="empty-state">没有满足“31/31 且低于今日价”的结果。</p>
@@ -173,6 +203,7 @@ async function saveAndStart() {
         <article v-for="result in otherResults" :key="result.item_id" class="price-sheet-result-card muted-card">
           <h3>{{ result.model_name }} · {{ result.storage }} · {{ result.color }}</h3>
           <p>{{ result.status === 'partial' ? `仅完成 ${result.coverage}，不能称为全国最低` : result.status === 'no_comparable' ? '未发现可比较商品' : '未发现低于今日价的商品' }}</p>
+          <p v-if="result.conditional_reason">条件价：{{ result.conditional_reason }}（不参与全国最低价）</p>
         </article>
       </div>
     </div>

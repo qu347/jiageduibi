@@ -43,10 +43,12 @@ export const usePriceSheetStore = defineStore('price-sheets', {
     error: null as ApiErrorBody | null,
     pollingTimer: null as number | null,
     refreshInFlight: false,
+    cartAttentionSeen: false,
   }),
   actions: {
     remember(detail: PriceSheetBatchDetail) {
       this.detail = detail
+      if (detail.checkout_progress.cart_attention_required) this.cartAttentionSeen = true
       localStorage.setItem('lastPriceSheetBatchId', String(detail.batch.id))
     },
     async recognize(file: File) {
@@ -55,7 +57,9 @@ export const usePriceSheetStore = defineStore('price-sheets', {
       this.loading = true
       this.error = null
       try {
-        this.remember(await apiUpload('/api/price-sheet-batches/recognize', file))
+        const detail = await apiUpload<PriceSheetBatchDetail>('/api/price-sheet-batches/recognize', file)
+        this.cartAttentionSeen = false
+        this.remember(detail)
         this.results = null
       } catch (error) {
         this.error = normalizeApiError(error)
@@ -144,6 +148,7 @@ export const usePriceSheetStore = defineStore('price-sheets', {
       this.detail = null
       this.results = null
       this.error = null
+      this.cartAttentionSeen = false
       localStorage.removeItem('lastPriceSheetBatchId')
     },
     startPolling() {
