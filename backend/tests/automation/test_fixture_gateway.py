@@ -25,9 +25,27 @@ def test_fixture_gateway_preserves_exact_color_from_price_sheet_query(monkeypatc
 
     candidates = gateway.discover("Apple iPhone 17 256GB 黑色", 30)
 
-    assert len(candidates) == 1
+    assert len(candidates) == 20
     assert candidates[0].title == "Apple iPhone 17 256GB 黑色 全新国行"
     assert candidates[0].initial_price_cents == 519900
+
+
+def test_fixture_checkout_preview_has_verified_conditional_and_address_required_cases(monkeypatch) -> None:
+    monkeypatch.setenv("PRICE_COMPARE_AUTOMATION_FIXTURE_DELAY_MS", "0")
+    gateway = FixtureBrowserGateway()
+    black = gateway.discover("Apple iPhone 17 256GB 黑色", 50)
+    white = gateway.discover("Apple iPhone 17 256GB 白色", 50)
+
+    verified = gateway.checkout_preview(black[0], get_region_target("110100"))
+    conditional = gateway.checkout_preview(black[1], get_region_target("110100"))
+    address_required = gateway.checkout_preview(white[0], get_region_target("110100"))
+
+    assert verified.price_status == "verified"
+    assert verified.payable_price_cents == 519900
+    assert conditional.price_status == "conditional"
+    assert conditional.payable_price_cents < verified.payable_price_cents
+    assert address_required.price_status == "unavailable"
+    assert address_required.unavailable_code == "checkout_address_required"
 
 
 def test_fixture_gateway_requires_exact_test_environment_value(monkeypatch) -> None:

@@ -8,11 +8,13 @@
 
 京东夹具限定 `#J_goodsList .gl-item`、`.p-name`、`.p-price`、`.p-shop` 和 `.p-link`。缺少 `.p-price` 返回 `missing_price`。
 
-## Read-only JD OpenCLI Plugin
+## JD OpenCLI Plugin
 
-项目自带 `price-compare-jd`，不覆盖 OpenCLI 上游内置 `jd` 命令。`search` 读取搜索列表候选；`verify-region` 每个代表地区只打开一次搜索页，通过已校验的京东四级地区编码更新本地配送地区 Cookie、刷新并回读区县和街道，失败时才回退到地址弹窗，并只返回候选 SKU 白名单中仍可见的商品。旧的逐商品 `verify` 保留为兼容命令，但自动任务优先使用批量命令。价目表模式严格匹配机型、容量和颜色，排除配件、二手/翻新、定金、分期、以旧换新和预约商品。搜索页没有明确展示的运费、普通优惠券或确认国补字段保持未知，不作推测；会员、支付、新人等资格价不计入可信到手价。插件不访问购物车、订单、支付或账号地址写入接口。Agent-Reach只用于安装/诊断，FastAPI 运行时直接调用 OpenCLI 的 JSON 输出。
+项目自带 `price-compare-jd`，不覆盖 OpenCLI 上游内置 `jd` 命令。`search`、`verify` 和 `verify-region` 是读取命令：搜索候选或通过已校验的京东四级地区编码更新本地配送地区后回读页面。价目表模式严格匹配机型、容量和颜色，排除配件、二手/翻新、定金、分期、以旧换新和预约商品，并冻结最多 20 个候选。
 
-命令失败被映射为安全状态：网络错误有限重试；`login_required`、`captcha`、`rate_limited` 暂停任务且不立即重试；`page_changed`、`unsupported_region` 只影响当前地区；`tool_unavailable` 停止整次任务。环境诊断只有在扩展与连接检查都明确成功时才报告 Browser Bridge 可用。原始 stderr 和页面 HTML 不进入数据库或前端。
+`checkout-preview` 明确标记为受控 write。它对每个候选与代表街道优先使用“立即购买”，只读取结算预览中的目标 SKU、数量 1、地区、优惠明细和应付金额；没有安全入口时才允许可验证恢复的购物车回退。命令永不选择提交订单或付款控件，进入收银台、付款或订单成功页会立即触发安全熔断。插件不创建或修改账号收货地址。Agent-Reach只用于安装/诊断，FastAPI 运行时直接调用 OpenCLI 的严格 JSON 输出。
+
+命令失败被映射为安全状态：网络错误有限重试；`login_required`、`captcha`、`rate_limited`、`safety_boundary_crossed` 和 `cart_isolation_failed` 暂停任务；缺少真实地址、无法确认 SKU/地区或价格时跳过当前组合；`tool_unavailable` 停止整次任务。环境诊断只有在扩展与连接检查都明确成功时才报告 Browser Bridge 可用。原始 stderr 和页面 HTML 不进入数据库或前端。
 
 ## Optional JD Union Candidate Source
 
