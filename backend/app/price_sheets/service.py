@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.automation.regions import MAINLAND_REGION_TARGETS
 from app.db.models.price_sheets import (
     PriceSheetBatch,
+    PriceSheetCheckoutTask,
     PriceSheetItem,
     PriceSheetRegionResult,
     PriceSheetRegionTask,
@@ -153,24 +154,6 @@ def start_batch(db: Session, batch_id: int) -> PriceSheetBatchDetail:
         if not item.selected:
             continue
         item.total_region_count = len(MAINLAND_REGION_TARGETS)
-        for target in MAINLAND_REGION_TARGETS:
-            db.add(PriceSheetRegionTask(
-                price_sheet_item_id=item.id,
-                region_code=target.region_code,
-                province=target.province,
-                city=target.city,
-                district=target.district,
-                street=target.street,
-                sequence=target.sequence,
-                status="queued",
-                attempts=0,
-                verified_candidate_count=0,
-                lowest_result_cents=None,
-                error_code=None,
-                error_summary=None,
-                started_at=None,
-                finished_at=None,
-            ))
     batch.status = "queued"
     batch.selected_count = len(selected)
     batch.pause_requested = False
@@ -198,6 +181,14 @@ def resume_batch(db: Session, batch_id: int) -> PriceSheetBatchDetail:
         batch.last_error_summary = None
         item_ids = db.scalars(select(PriceSheetItem.id).where(PriceSheetItem.batch_id == batch_id)).all()
         if item_ids:
+            checkout_tasks = db.scalars(select(PriceSheetCheckoutTask).where(
+                PriceSheetCheckoutTask.price_sheet_item_id.in_(item_ids),
+                PriceSheetCheckoutTask.status == "waiting_user",
+            )).all()
+            for task in checkout_tasks:
+                task.status = "queued"
+                task.error_code = None
+                task.error_summary = None
             tasks = db.scalars(select(PriceSheetRegionTask).where(
                 PriceSheetRegionTask.price_sheet_item_id.in_(item_ids),
                 PriceSheetRegionTask.status == "waiting_user",
@@ -231,6 +222,16 @@ def retry_failed(db: Session, batch_id: int) -> PriceSheetBatchDetail:
     batch = _require_batch(db, batch_id)
     item_ids = db.scalars(select(PriceSheetItem.id).where(PriceSheetItem.batch_id == batch_id)).all()
     if item_ids:
+        checkout_tasks = db.scalars(select(PriceSheetCheckoutTask).where(
+            PriceSheetCheckoutTask.price_sheet_item_id.in_(item_ids),
+            PriceSheetCheckoutTask.status == "failed",
+        )).all()
+        for task in checkout_tasks:
+            task.status = "queued"
+            task.error_code = None
+            task.error_summary = None
+            task.started_at = None
+            task.finished_at = None
         tasks = db.scalars(select(PriceSheetRegionTask).where(
             PriceSheetRegionTask.price_sheet_item_id.in_(item_ids),
             PriceSheetRegionTask.status == "failed",
@@ -270,6 +271,12 @@ def recover_interrupted_batches(db: Session) -> int:
             item.status = "queued"
             item.started_at = None
         if item_ids:
+            for task in db.scalars(select(PriceSheetCheckoutTask).where(
+                PriceSheetCheckoutTask.price_sheet_item_id.in_(item_ids),
+                PriceSheetCheckoutTask.status == "running",
+            )).all():
+                task.status = "queued"
+                task.started_at = None
             for task in db.scalars(select(PriceSheetRegionTask).where(
                 PriceSheetRegionTask.price_sheet_item_id.in_(item_ids),
                 PriceSheetRegionTask.status == "running",

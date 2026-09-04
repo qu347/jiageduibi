@@ -4,7 +4,7 @@ from pathlib import Path
 from alembic import command
 from alembic.config import Config
 
-from app.db.models.price_sheets import PriceSheetRegionTask
+from app.db.models.price_sheets import PriceSheetCheckoutTask, PriceSheetRegionTask
 from app.db.session import build_engine, session_factory
 from app.price_sheets.contracts import ParsedPriceSheet, ParsedPriceSheetItem
 from app.price_sheets.service import create_batch, replace_items, start_batch
@@ -31,7 +31,7 @@ def parsed_sheet() -> ParsedPriceSheet:
     )
 
 
-def test_reviewed_items_create_31_street_tasks_per_selected_variant(tmp_path: Path) -> None:
+def test_start_queues_items_without_creating_tasks_before_candidates_are_frozen(tmp_path: Path) -> None:
     factory = database(tmp_path)
     with factory() as db:
         detail = create_batch(db, 'sheet.png', parsed_sheet())
@@ -43,11 +43,10 @@ def test_reviewed_items_create_31_street_tasks_per_selected_variant(tmp_path: Pa
         started = start_batch(db, detail.batch.id)
         db.commit()
 
-        tasks = db.query(PriceSheetRegionTask).order_by(PriceSheetRegionTask.sequence).all()
         assert started.batch.status == 'queued'
-        assert len(tasks) == 31
-        assert tasks[0].street == '奥运村街道'
-        assert tasks[-1].street == '解放南路街道'
+        assert db.query(PriceSheetRegionTask).count() == 0
+        assert db.query(PriceSheetCheckoutTask).count() == 0
+        assert started.items[0].total_region_count == 31
 
 
 def test_review_rejects_duplicate_exact_variants(tmp_path: Path) -> None:
