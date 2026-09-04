@@ -2,6 +2,7 @@ import json
 import subprocess
 import sys
 from collections.abc import Sequence
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -19,6 +20,7 @@ from app.automation.regions import get_region_target
 FIXTURES = Path(__file__).parent / "fixtures"
 SEARCH_JSON = (FIXTURES / "opencli-search.json").read_text(encoding="utf-8")
 VERIFY_JSON = (FIXTURES / "opencli-verify.json").read_text(encoding="utf-8")
+CHECKOUT_JSON = (FIXTURES / "opencli-checkout-preview.json").read_text(encoding="utf-8")
 
 
 class FakeRunner:
@@ -205,6 +207,96 @@ def test_verify_region_rejects_offer_outside_candidate_allowlist() -> None:
     assert failure.value.code == "invalid_output"
 
 
+def test_checkout_preview_passes_one_sku_and_complete_region() -> None:
+    runner = FakeRunner(results=[
+        CommandResult(returncode=0, stdout=SEARCH_JSON, stderr=""),
+        CommandResult(returncode=0, stdout=CHECKOUT_JSON, stderr=""),
+    ])
+    gateway = OpenCliGateway(runner)
+    candidate = gateway.discover("Apple iPhone 17 256GB 黑色", 30)[0]
+
+    preview = gateway.checkout_preview(candidate, get_region_target("110100"))
+
+    assert runner.calls[-1] == [
+        OPENCLI_EXECUTABLE,
+        "price-compare-jd",
+        "checkout-preview",
+        "100000000001",
+        "--province",
+        "北京市",
+        "--city",
+        "北京市",
+        "--district",
+        "朝阳区",
+        "--street",
+        "奥运村街道",
+        "--area-id",
+        "1-72-55652-0",
+        "--allow-cart-fallback",
+        "true",
+        "--site-session",
+        "persistent",
+        "-f",
+        "json",
+    ]
+    assert preview.platform_sku_id == candidate.platform_sku_id
+    assert preview.payable_price_cents == 541_900
+    assert preview.quantity == 1
+    assert preview.target_only is True
+    assert preview.captured_at == datetime(2026, 9, 4, tzinfo=UTC)
+
+
+@pytest.mark.parametrize("forbidden_field", ["order_id", "payment_id", "payment_status", "pay_url", "cookie"])
+def test_checkout_preview_rejects_order_payment_and_unknown_fields(forbidden_field: str) -> None:
+    rows = json.loads(CHECKOUT_JSON)
+    rows[0][forbidden_field] = "must-not-pass"
+    gateway = OpenCliGateway(FakeRunner(stdout=json.dumps(rows, ensure_ascii=False)))
+
+    with pytest.raises(GatewayFailure) as failure:
+        gateway.checkout_preview(
+            OpenCliGateway(FakeRunner(stdout=SEARCH_JSON)).discover("iPhone 17", 30)[0],
+            get_region_target("110100"),
+        )
+
+    assert failure.value.code == "invalid_output"
+    assert "must-not-pass" not in failure.value.safe_message
+
+
+@pytest.mark.parametrize(
+    ("changes", "description"),
+    [
+        ({"quantity": 2}, "quantity"),
+        ({"target_only": False}, "target-only"),
+        ({"region_confirmed": False}, "region"),
+        ({"payable_price_cents": None}, "payable"),
+        ({"conditional_reason": "PLUS"}, "condition"),
+        ({"entry_mode": "cart_fallback", "cart_restored": False}, "cart"),
+    ],
+)
+def test_checkout_preview_rejects_untrusted_verified_results(changes: dict[str, object], description: str) -> None:
+    rows = json.loads(CHECKOUT_JSON)
+    rows[0].update(changes)
+    gateway = OpenCliGateway(FakeRunner(stdout=json.dumps(rows, ensure_ascii=False)))
+    candidate = OpenCliGateway(FakeRunner(stdout=SEARCH_JSON)).discover("iPhone 17", 30)[0]
+
+    with pytest.raises(GatewayFailure) as failure:
+        gateway.checkout_preview(candidate, get_region_target("110100"))
+
+    assert failure.value.code == "invalid_output", description
+
+
+def test_checkout_preview_rejects_a_different_sku() -> None:
+    rows = json.loads(CHECKOUT_JSON)
+    rows[0]["platform_sku_id"] = "999999999999"
+    gateway = OpenCliGateway(FakeRunner(stdout=json.dumps(rows, ensure_ascii=False)))
+    candidate = OpenCliGateway(FakeRunner(stdout=SEARCH_JSON)).discover("iPhone 17", 30)[0]
+
+    with pytest.raises(GatewayFailure) as failure:
+        gateway.checkout_preview(candidate, get_region_target("110100"))
+
+    assert failure.value.code == "invalid_output"
+
+
 def test_diagnose_checks_only_the_installed_plugin_command_group() -> None:
     plugin_help = json.dumps({
         "site": "price-compare-jd",
@@ -212,6 +304,7 @@ def test_diagnose_checks_only_the_installed_plugin_command_group() -> None:
             {"name": "search"},
             {"name": "verify"},
             {"name": "verify-region"},
+            {"name": "checkout-preview"},
         ],
     })
     runner = FakeRunner(results=[

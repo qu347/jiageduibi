@@ -7,10 +7,11 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Literal, Protocol
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from app.automation.contracts import (
     AutomationEnvironment,
+    CheckoutPreview,
     DiscoveredCandidate,
     GatewayFailure,
     VerifiedOffer,
@@ -96,6 +97,57 @@ class VerifiedOfferOutput(BaseModel):
     sale_price_includes_subsidy: bool = False
 
 
+class CheckoutPreviewOutput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    platform_sku_id: str = Field(min_length=1, max_length=160)
+    title: str = Field(min_length=1, max_length=500)
+    product_url: str = Field(min_length=1, max_length=2000)
+    shop_name: str = Field(min_length=1, max_length=200)
+    shop_type: Literal["self_operated", "official_flagship", "authorized", "third_party"]
+    entry_mode: Literal["buy_now", "cart_fallback"]
+    price_status: Literal["verified", "conditional", "unavailable"]
+    quantity: int = Field(ge=0, le=99)
+    target_only: bool
+    line_original_price_cents: int | None = Field(default=None, ge=0)
+    line_sale_price_cents: int | None = Field(default=None, ge=0)
+    merchant_discount_cents: int = Field(default=0, ge=0)
+    ordinary_coupon_cents: int = Field(default=0, ge=0)
+    subsidy_amount_cents: int = Field(default=0, ge=0)
+    shipping_fee_cents: int = Field(default=0, ge=0)
+    payable_price_cents: int | None = Field(default=None, gt=0)
+    discount_summary: str = Field(default="", max_length=2000)
+    conditional_reason: str | None = Field(default=None, max_length=500)
+    unavailable_code: Literal[
+        "checkout_address_required",
+        "checkout_region_unconfirmed",
+        "buy_now_unavailable",
+        "cart_isolation_failed",
+        "sku_unconfirmed",
+        "price_unavailable",
+    ] | None = None
+    region_confirmed: bool
+    cart_restored: bool
+    captured_at: datetime
+
+    @model_validator(mode="after")
+    def validate_trust_boundary(self) -> "CheckoutPreviewOutput":
+        if self.price_status in {"verified", "conditional"}:
+            if self.quantity != 1 or not self.target_only:
+                raise ValueError("checkout must contain only one unit of the target SKU")
+            if not self.region_confirmed or self.payable_price_cents is None:
+                raise ValueError("checkout region and payable amount must be confirmed")
+        if self.price_status == "verified" and self.conditional_reason is not None:
+            raise ValueError("verified checkout cannot contain a conditional reason")
+        if self.price_status == "conditional" and not self.conditional_reason:
+            raise ValueError("conditional checkout must identify its condition")
+        if self.price_status == "unavailable" and not self.unavailable_code:
+            raise ValueError("unavailable checkout must identify its reason")
+        if self.entry_mode == "cart_fallback" and not self.cart_restored and self.price_status != "unavailable":
+            raise ValueError("an unrestored cart result cannot be trusted")
+        return self
+
+
 _EXIT_FAILURES = {
     66: ("empty_result", "平台没有返回可用结果"),
     69: ("tool_unavailable", "浏览器桥接当前不可用"),
@@ -111,6 +163,13 @@ _TOKEN_FAILURES = {
     "UNSUPPORTED_REGION": ("unsupported_region", "页面无法选择该代表地区"),
     "NETWORK_ERROR": ("network_error", "浏览器命令超时或网络异常"),
     "RATE_LIMITED": ("rate_limited", "京东访问频繁，请稍后恢复任务"),
+    "CHECKOUT_ADDRESS_REQUIRED": ("checkout_address_required", "结算页需要真实完整收货地址"),
+    "CHECKOUT_REGION_UNCONFIRMED": ("checkout_region_unconfirmed", "结算页无法确认目标地区"),
+    "BUY_NOW_UNAVAILABLE": ("buy_now_unavailable", "商品没有可安全使用的立即购买入口"),
+    "CART_ISOLATION_FAILED": ("cart_isolation_failed", "购物车无法安全隔离或恢复"),
+    "SKU_UNCONFIRMED": ("sku_unconfirmed", "结算页无法确认目标商品"),
+    "PRICE_UNAVAILABLE": ("price_unavailable", "结算页没有明确应付金额"),
+    "SAFETY_BOUNDARY_CROSSED": ("safety_boundary_crossed", "检测到订单或付款安全边界"),
 }
 
 
@@ -227,6 +286,41 @@ class OpenCliGateway:
             raise GatewayFailure("invalid_output", "地区批量核验返回了候选白名单外的商品")
         return [VerifiedOffer(**row.model_dump()) for row in rows]
 
+    def checkout_preview(
+        self,
+        candidate: DiscoveredCandidate,
+        region: RegionTarget,
+        allow_cart_fallback: bool = True,
+    ) -> CheckoutPreview:
+        rows = self._execute_rows(
+            [
+                OPENCLI_EXECUTABLE,
+                "price-compare-jd",
+                "checkout-preview",
+                candidate.platform_sku_id,
+                "--province",
+                region.province,
+                "--city",
+                region.city,
+                "--district",
+                region.district,
+                "--street",
+                region.street,
+                "--area-id",
+                region.jd_area_id,
+                "--allow-cart-fallback",
+                "true" if allow_cart_fallback else "false",
+                "--site-session",
+                "persistent",
+                "-f",
+                "json",
+            ],
+            CheckoutPreviewOutput,
+        )
+        if len(rows) != 1 or rows[0].platform_sku_id != candidate.platform_sku_id:
+            raise GatewayFailure("invalid_output", "结算核价没有返回唯一目标商品")
+        return CheckoutPreview(**rows[0].model_dump())
+
     def diagnose(self) -> AutomationEnvironment:
         agent_reach = self._runner.run(["agent-reach", "doctor", "--json"], 20)
         doctor = self._runner.run([OPENCLI_EXECUTABLE, "doctor"], 20)
@@ -306,7 +400,7 @@ class OpenCliGateway:
             for command in commands
             if isinstance(command, dict) and isinstance(command.get("name"), str)
         }
-        return {"search", "verify", "verify-region"} <= found
+        return {"search", "verify", "verify-region", "checkout-preview"} <= found
 
     @staticmethod
     def _browser_bridge_connected(raw_output: str) -> bool:

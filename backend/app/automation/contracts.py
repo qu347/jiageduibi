@@ -7,6 +7,8 @@ from app.automation.regions import RegionTarget
 
 ShopType = Literal["self_operated", "official_flagship", "authorized", "third_party"]
 SubsidyStatus = Literal["confirmed", "estimated", "unknown", "ineligible"]
+CheckoutEntryMode = Literal["buy_now", "cart_fallback"]
+CheckoutPriceStatus = Literal["verified", "conditional", "unavailable"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -43,6 +45,32 @@ class VerifiedOffer:
     captured_at: datetime
     sale_price_includes_coupon: bool = False
     sale_price_includes_subsidy: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class CheckoutPreview:
+    platform_sku_id: str
+    title: str
+    product_url: str
+    shop_name: str
+    shop_type: ShopType
+    entry_mode: CheckoutEntryMode
+    price_status: CheckoutPriceStatus
+    quantity: int
+    target_only: bool
+    line_original_price_cents: int | None
+    line_sale_price_cents: int | None
+    merchant_discount_cents: int
+    ordinary_coupon_cents: int
+    subsidy_amount_cents: int
+    shipping_fee_cents: int
+    payable_price_cents: int | None
+    discount_summary: str
+    conditional_reason: str | None
+    unavailable_code: str | None
+    region_confirmed: bool
+    cart_restored: bool
+    captured_at: datetime
 
 
 @dataclass(frozen=True, slots=True)
@@ -84,3 +112,13 @@ class RegionBatchGateway(Protocol):
         candidates: list[DiscoveredCandidate],
         region: RegionTarget,
     ) -> list[VerifiedOffer]: ...
+
+
+@runtime_checkable
+class CheckoutPreviewGateway(Protocol):
+    def checkout_preview(
+        self,
+        candidate: DiscoveredCandidate,
+        region: RegionTarget,
+        allow_cart_fallback: bool = True,
+    ) -> CheckoutPreview: ...

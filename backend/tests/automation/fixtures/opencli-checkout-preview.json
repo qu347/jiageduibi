@@ -1,0 +1,26 @@
+[
+  {
+    "platform_sku_id": "100000000001",
+    "title": "Apple iPhone 17 256GB 黑色 全新国行",
+    "product_url": "https://item.jd.com/100000000001.html",
+    "shop_name": "Apple产品京东自营旗舰店",
+    "shop_type": "self_operated",
+    "entry_mode": "buy_now",
+    "price_status": "verified",
+    "quantity": 1,
+    "target_only": true,
+    "line_original_price_cents": 591900,
+    "line_sale_price_cents": 541900,
+    "merchant_discount_cents": 0,
+    "ordinary_coupon_cents": 0,
+    "subsidy_amount_cents": 50000,
+    "shipping_fee_cents": 0,
+    "payable_price_cents": 541900,
+    "discount_summary": "国家补贴已应用 500 元",
+    "conditional_reason": null,
+    "unavailable_code": null,
+    "region_confirmed": true,
+    "cart_restored": true,
+    "captured_at": "2026-09-04T00:00:00Z"
+  }
+]
